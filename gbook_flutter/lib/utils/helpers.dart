@@ -15,6 +15,18 @@ class AppHelpers {
 
   static String formatCurrency(double amount) => _currencyFmt.format(amount);
 
+  /// Compact format: ₹1.2K, ₹4.5L, ₹1.2Cr — used in summary cards
+  static String formatCurrencyCompact(double amount) {
+    if (amount >= 10000000) {
+      return '₹${(amount / 10000000).toStringAsFixed(1)}Cr';
+    } else if (amount >= 100000) {
+      return '₹${(amount / 100000).toStringAsFixed(1)}L';
+    } else if (amount >= 1000) {
+      return '₹${(amount / 1000).toStringAsFixed(1)}K';
+    }
+    return '₹${amount.toStringAsFixed(0)}';
+  }
+
   static String formatDate(DateTime date) => _dateFmt.format(date);
 
   static String formatDateTime(DateTime date) => _dateTimeFmt.format(date);

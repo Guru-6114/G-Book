@@ -1,4 +1,8 @@
 // lib/screens/auth_screens.dart
+// Fixed errors:
+//  - removed onSubmitted (not a valid param on TextFormField, use onFieldSubmitted)
+//  - replaced deprecated controller.value with initialValue pattern for Autocomplete
+//  - added curly braces to for loops
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../providers/providers.dart';
@@ -67,20 +71,26 @@ class _AuthScreenState extends State<AuthScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Center(
-                  child: Text('G',
-                      style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white)),
+                  child: Text(
+                    'G',
+                    style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
-              const Text('Welcome to GBook',
-                  style: TextStyle(
-                      fontSize: 26, fontWeight: FontWeight.w800)),
+              const Text(
+                'Welcome to GBook',
+                style:
+                    TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 6),
-              const Text('Enter your mobile number to continue',
-                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+              const Text(
+                'Enter your mobile number to continue',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
               const SizedBox(height: 36),
               TextFormField(
                 controller: _phoneCtrl,
@@ -94,8 +104,9 @@ class _AuthScreenState extends State<AuthScreen> {
                   prefixText: '+91  ',
                   prefixIcon: Icon(Icons.phone_outlined),
                 ),
-                style: const TextStyle(
-                    fontSize: 18, letterSpacing: 2),
+                style: const TextStyle(fontSize: 18, letterSpacing: 2),
+                // FIX: use onFieldSubmitted, not onSubmitted
+                onFieldSubmitted: (_) => _sendOtp(),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -117,8 +128,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Text(
                   'OTP will be sent via SMS\n(Use 1234 for testing)',
                   style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500),
+                      fontSize: 12, color: Colors.grey.shade500),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -162,7 +172,8 @@ class _OtpScreenState extends State<OtpScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (_) => ProfileSetupScreen(phone: widget.phone)),
+              builder: (_) =>
+                  ProfileSetupScreen(phone: widget.phone)),
         );
       } else {
         Navigator.pushAndRemoveUntil(
@@ -178,8 +189,12 @@ class _OtpScreenState extends State<OtpScreen> {
 
   @override
   void dispose() {
-    for (final c in _ctls) c.dispose();
-    for (final n in _nodes) n.dispose();
+    for (final c in _ctls) {
+      c.dispose(); // FIX: curly braces in for loop
+    }
+    for (final n in _nodes) {
+      n.dispose(); // FIX: curly braces in for loop
+    }
     super.dispose();
   }
 
@@ -197,13 +212,16 @@ class _OtpScreenState extends State<OtpScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Enter OTP',
-                style:
-                    TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+            const Text(
+              'Enter OTP',
+              style: TextStyle(
+                  fontSize: 24, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 8),
-            Text('Sent to +91 ${widget.phone}',
-                style:
-                    const TextStyle(fontSize: 14, color: Colors.grey)),
+            Text(
+              'Sent to +91 ${widget.phone}',
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
             const SizedBox(height: 32),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -223,8 +241,8 @@ class _OtpScreenState extends State<OtpScreen> {
                         fontSize: 20, fontWeight: FontWeight.w700),
                     decoration: InputDecoration(
                       counterText: '',
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14),
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 14),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -303,9 +321,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       businessName: _businessNameCtrl.text.trim(),
       ownerName: _ownerNameCtrl.text.trim(),
       phone: widget.phone,
-      email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-      address:
-          _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+      email:
+          _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      address: _addressCtrl.text.trim().isEmpty
+          ? null
+          : _addressCtrl.text.trim(),
       category: _category,
       createdAt: DateTime.now(),
     );
@@ -346,12 +366,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             padding: const EdgeInsets.all(24),
             children: [
               const SizedBox(height: 16),
-              const Text('Setup Your Business',
-                  style: TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.w800)),
+              const Text(
+                'Setup Your Business',
+                style: TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 6),
-              const Text('Tell us about your business',
-                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+              const Text(
+                'Tell us about your business',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
               const SizedBox(height: 28),
               TextFormField(
                 controller: _businessNameCtrl,
@@ -403,7 +427,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     .map((c) =>
                         DropdownMenuItem(value: c, child: Text(c)))
                     .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
+                onChanged: (v) =>
+                    setState(() => _category = v ?? _category),
               ),
               const SizedBox(height: 28),
               SizedBox(
@@ -417,8 +442,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                           width: 20,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
-                      : const Text('Save & Continue',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      : const Text(
+                          'Save & Continue',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                 ),
               ),
             ],

@@ -1,6 +1,6 @@
 """
 G-Book API Models
-Custom User, Business, Customer, Transaction models
+Custom User, Business, Customer, Transaction, FCMToken models
 """
 import uuid
 from django.db import models
@@ -51,6 +51,12 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f"{self.name} ({self.phone})"
+
+    def get_active_fcm_tokens(self):
+        """Return list of active FCM token strings for this user."""
+        return list(
+            self.fcm_tokens.filter(is_active=True).values_list('token', flat=True)
+        )
 
 
 class OTPVerification(models.Model):
@@ -192,3 +198,72 @@ class PaymentReminder(models.Model):
 
     def __str__(self):
         return f"Reminder for {self.customer.name} on {self.reminder_date}"
+
+
+# ── NEW: FCMToken model ───────────────────────────────────────────────────────
+
+class FCMToken(models.Model):
+    """
+    FCM device tokens for push notifications.
+    One user can have multiple tokens (multiple devices).
+    """
+    PLATFORM_CHOICES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='fcm_tokens',
+    )
+    token = models.TextField(unique=True)
+    platform = models.CharField(
+        max_length=10,
+        choices=PLATFORM_CHOICES,
+        default='android',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'fcm_tokens'
+        verbose_name = 'FCM Token'
+        verbose_name_plural = 'FCM Tokens'
+        # One token per user-platform combo (upsert friendly)
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.phone} [{self.platform}] - {'active' if self.is_active else 'inactive'}"
+
+    @classmethod
+    def register(cls, user, token: str, platform: str = 'android') -> 'FCMToken':
+        """
+        Register or update a token for a user.
+        If the token already exists (different user), reassign it.
+        """
+        obj, created = cls.objects.update_or_create(
+            token=token,
+            defaults={
+                'user': user,
+                'platform': platform,
+                'is_active': True,
+            },
+        )
+        return obj
+
+    @classmethod
+    def deactivate(cls, token: str) -> None:
+        """Deactivate a specific token (on logout)."""
+        cls.objects.filter(token=token).update(is_active=False)
+
+    @classmethod
+    def cleanup_invalid(cls, invalid_tokens: list) -> int:
+        """Deactivate tokens reported as invalid by FCM."""
+        count = cls.objects.filter(token__in=invalid_tokens).update(is_active=False)
+        return count

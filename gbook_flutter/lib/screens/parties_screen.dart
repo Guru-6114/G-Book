@@ -1,4 +1,5 @@
 // lib/screens/parties_screen.dart
+// Matches Khatabook Customers/Suppliers UI (Image 1)
 import 'package:flutter/material.dart';
 import '../providers/providers.dart';
 import 'package:provider/provider.dart';
@@ -36,16 +37,35 @@ class _PartiesScreenState extends State<PartiesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundGrey,
       appBar: AppBar(
-        title: const Text('Parties'),
+        backgroundColor: AppTheme.primaryColor,
+        automaticallyImplyLeading: false,
+        title: Consumer<AuthProvider>(
+          builder: (_, auth, __) => Text(
+            auth.profile?.businessName ?? 'My Business',
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 20),
+            onPressed: () => Navigator.pushNamed(context, '/profile'),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           indicatorColor: Colors.white,
+          indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
+          labelStyle: const TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: 1),
+          unselectedLabelStyle: const TextStyle(fontSize: 14),
           tabs: const [
-            Tab(text: 'Customers'),
-            Tab(text: 'Suppliers'),
+            Tab(text: 'CUSTOMERS'),
+            Tab(text: 'SUPPLIERS'),
           ],
         ),
       ),
@@ -60,7 +80,7 @@ class _PartiesScreenState extends State<PartiesScreen>
   }
 }
 
-// ── Customers Tab ─────────────────────────────────────────────────────────────
+// ── Customers Tab ──────────────────────────────────────────────────────────────
 class _CustomersTab extends StatefulWidget {
   const _CustomersTab();
 
@@ -90,40 +110,83 @@ class _CustomersTabState extends State<_CustomersTab> {
 
     return Column(
       children: [
-        // Summary row
+        // Summary cards - Khatabook style
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.all(12),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
             children: [
-              Expanded(
-                child: SummaryCard(
-                  label: 'You Will Get',
-                  amount: provider.totalReceivable,
-                  color: AppTheme.creditColor,
-                  icon: Icons.arrow_downward,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _KhatabookSummaryCard(
+                      label: 'You will give',
+                      amount: provider.totalPayable,
+                      color: const Color(0xFF00796B), // teal/green
+                      prefix: '₹',
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 50,
+                    color: const Color(0xFFE0E0E0),
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  Expanded(
+                    child: _KhatabookSummaryCard(
+                      label: 'You will get',
+                      amount: provider.totalReceivable,
+                      color: const Color(0xFFB71C1C), // dark red
+                      prefix: '₹',
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SummaryCard(
-                  label: 'You Will Give',
-                  amount: provider.totalPayable,
-                  color: AppTheme.debitColor,
-                  icon: Icons.arrow_upward,
+              const SizedBox(height: 10),
+              // View Reports button
+              InkWell(
+                onTap: () => Navigator.pushNamed(context, '/reports'),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFF1565C0)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.picture_as_pdf_outlined,
+                          size: 16, color: Color(0xFF1565C0)),
+                      SizedBox(width: 6),
+                      Text(
+                        'View Reports',
+                        style: TextStyle(
+                          color: Color(0xFF1565C0),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        // Search
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+
+        // Search bar
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: TextField(
             controller: _searchCtrl,
             decoration: InputDecoration(
               hintText: 'Search customers...',
-              prefixIcon: const Icon(Icons.search, size: 20),
+              hintStyle:
+                  const TextStyle(fontSize: 13, color: Color(0xFFBDBDBD)),
+              prefixIcon:
+                  const Icon(Icons.search, size: 20, color: Color(0xFF9E9E9E)),
               suffixIcon: _query.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.close, size: 18),
@@ -133,41 +196,43 @@ class _CustomersTabState extends State<_CustomersTab> {
                       })
                   : null,
               isDense: true,
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide.none,
+              ),
             ),
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
+
+        const Divider(height: 1),
+
         // List
         Expanded(
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
               : customers.isEmpty
-                  ? EmptyState(
-                      title: _query.isNotEmpty
-                          ? 'No customers match "$_query"'
-                          : 'No customers yet',
-                      subtitle: _query.isEmpty
-                          ? 'Add your first customer to start tracking'
-                          : '',
-                      icon: Icons.people_outline,
-                      actionLabel:
-                          _query.isEmpty ? 'Add Customer' : null,
-                      onAction: _query.isEmpty
-                          ? () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const AddCustomerScreen()),
-                              )
-                          : null,
+                  ? _KhatabookEmptyState(
+                      onAddCustomer: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const AddCustomerScreen()),
+                      ),
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      itemCount: customers.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 68),
-                      itemBuilder: (_, i) =>
-                          _CustomerTile(customer: customers[i]),
+                  : RefreshIndicator(
+                      onRefresh: () =>
+                          context.read<CustomerProvider>().loadCustomers(),
+                      child: ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: customers.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1, indent: 68),
+                        itemBuilder: (_, i) =>
+                            _CustomerTile(customer: customers[i]),
+                      ),
                     ),
         ),
       ],
@@ -175,6 +240,129 @@ class _CustomersTabState extends State<_CustomersTab> {
   }
 }
 
+// ── Khatabook-style Summary Card ──────────────────────────────────────────────
+class _KhatabookSummaryCard extends StatelessWidget {
+  final String label;
+  final double amount;
+  final Color color;
+  final String prefix;
+
+  const _KhatabookSummaryCard({
+    required this.label,
+    required this.amount,
+    required this.color,
+    required this.prefix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF757575)),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$prefix ${AppHelpers.formatCurrencyCompact(amount)}',
+          style: TextStyle(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Khatabook-style Empty State ────────────────────────────────────────────────
+class _KhatabookEmptyState extends StatelessWidget {
+  final VoidCallback onAddCustomer;
+  const _KhatabookEmptyState({required this.onAddCustomer});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Illustration placeholder
+              Container(
+                width: 200,
+                height: 160,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.people_alt_outlined,
+                        size: 64, color: Colors.grey.shade400),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Collect payments faster',
+                      style: TextStyle(
+                          color: Colors.grey.shade500, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Add customers & maintain your Khata',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF424242),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Bottom action bar
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_forward,
+                    color: Color(0xFF1565C0)),
+                onPressed: () {},
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: onAddCustomer,
+                icon: const Icon(Icons.person_add, size: 18),
+                label: const Text(
+                  'ADD CUSTOMER',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Customer Tile ──────────────────────────────────────────────────────────────
 class _CustomerTile extends StatelessWidget {
   final Customer customer;
   const _CustomerTile({required this.customer});
@@ -183,54 +371,98 @@ class _CustomerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final balance = customer.balance;
     final hasBalance = balance != 0;
-    final color =
-        balance >= 0 ? AppTheme.creditColor : AppTheme.debitColor;
-    final label = balance >= 0 ? 'Will Give' : 'Will Get';
+    // Khatabook: positive balance = green (you will get)
+    // negative = red (you will give)
+    final color = balance > 0
+        ? const Color(0xFF00796B)
+        : balance < 0
+            ? const Color(0xFFB71C1C)
+            : Colors.grey;
+    final label = balance > 0 ? 'Will Give' : 'Will Get';
 
-    return ListTile(
+    return InkWell(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
             builder: (_) => CustomerScreen(customer: customer)),
       ),
-      leading: CircleAvatar(
-        backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
-        child: Text(
-          AppHelpers.initials(customer.name),
-          style: TextStyle(
-              color: AppTheme.primaryColor,
-              fontWeight: FontWeight.w700,
-              fontSize: 14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            // Avatar circle
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppHelpers.getAvatarColor(customer.name)
+                    .withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  AppHelpers.initials(customer.name),
+                  style: TextStyle(
+                    color: AppHelpers.getAvatarColor(customer.name),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    customer.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Color(0xFF212121),
+                    ),
+                  ),
+                  if (customer.phone != null)
+                    Text(
+                      customer.phone!,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF9E9E9E)),
+                    ),
+                ],
+              ),
+            ),
+            if (hasBalance)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '₹ ${AppHelpers.formatCurrencyCompact(balance.abs())}',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 11, color: color),
+                  ),
+                ],
+              )
+            else
+              const Text(
+                'Settled',
+                style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
+              ),
+          ],
         ),
       ),
-      title: Text(customer.name,
-          style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: customer.phone != null
-          ? Text(customer.phone!,
-              style: const TextStyle(fontSize: 12))
-          : null,
-      trailing: hasBalance
-          ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(AppHelpers.formatCurrency(balance.abs()),
-                    style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
-                Text(label,
-                    style:
-                        TextStyle(fontSize: 10, color: color)),
-              ],
-            )
-          : const Text('Settled',
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
     );
   }
 }
 
-// ── Suppliers Tab ─────────────────────────────────────────────────────────────
+// ── Suppliers Tab ──────────────────────────────────────────────────────────────
 class _SuppliersTab extends StatefulWidget {
   const _SuppliersTab();
 
@@ -260,114 +492,95 @@ class _SuppliersTabState extends State<_SuppliersTab> {
 
     return Column(
       children: [
-        // Summary
         Container(
           color: Colors.white,
           padding: const EdgeInsets.all(12),
-          child: SummaryCard(
+          child: _KhatabookSummaryCard(
             label: 'Total Payable',
             amount: provider.totalPayable,
-            color: AppTheme.debitColor,
-            icon: Icons.arrow_upward,
+            color: const Color(0xFFB71C1C),
+            prefix: '₹',
           ),
         ),
-        // Search
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: TextField(
             controller: _searchCtrl,
             decoration: InputDecoration(
               hintText: 'Search suppliers...',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _query.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _query = '');
-                      })
-                  : null,
+              prefixIcon:
+                  const Icon(Icons.search, size: 20, color: Color(0xFF9E9E9E)),
               isDense: true,
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide.none,
+              ),
             ),
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
-        // List
+        const Divider(height: 1),
         Expanded(
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
               : suppliers.isEmpty
                   ? EmptyState(
-                      title: _query.isNotEmpty
-                          ? 'No suppliers match "$_query"'
-                          : 'No suppliers yet',
-                      subtitle: _query.isEmpty
-                          ? 'Add your suppliers here'
-                          : '',
+                      title: 'No suppliers yet',
+                      subtitle: 'Add your suppliers here',
                       icon: Icons.local_shipping_outlined,
-                      actionLabel:
-                          _query.isEmpty ? 'Add Supplier' : null,
-                      onAction: _query.isEmpty
-                          ? () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const AddPartyScreen(
-                                            isSupplier: true)),
-                              )
-                          : null,
+                      actionLabel: 'Add Supplier',
+                      onAction: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const AddPartyScreen(isSupplier: true)),
+                      ),
                     )
                   : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
                       itemCount: suppliers.length,
                       separatorBuilder: (_, __) =>
                           const Divider(height: 1, indent: 68),
-                      itemBuilder: (_, i) =>
-                          _SupplierTile(supplier: suppliers[i]),
+                      itemBuilder: (_, i) {
+                        final s = suppliers[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppHelpers.getAvatarColor(s.name)
+                                .withValues(alpha: 0.15),
+                            child: Text(
+                              AppHelpers.initials(s.name),
+                              style: TextStyle(
+                                color: AppHelpers.getAvatarColor(s.name),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          title: Text(s.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600)),
+                          subtitle: s.phone != null
+                              ? Text(s.phone!,
+                                  style: const TextStyle(fontSize: 12))
+                              : null,
+                          trailing: s.balance != 0
+                              ? Text(
+                                  '₹ ${AppHelpers.formatCurrencyCompact(s.balance.abs())}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFB71C1C),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )
+                              : const Text('Settled',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey)),
+                        );
+                      },
                     ),
         ),
       ],
-    );
-  }
-}
-
-class _SupplierTile extends StatelessWidget {
-  final Supplier supplier;
-  const _SupplierTile({required this.supplier});
-
-  @override
-  Widget build(BuildContext context) {
-    final balance = supplier.balance;
-    final hasBalance = balance != 0;
-
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor:
-            AppTheme.primaryColor.withValues(alpha: 0.12),
-        child: Text(
-          AppHelpers.initials(supplier.name),
-          style: TextStyle(
-              color: AppTheme.primaryColor,
-              fontWeight: FontWeight.w700,
-              fontSize: 14),
-        ),
-      ),
-      title: Text(supplier.name,
-          style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: supplier.phone != null
-          ? Text(supplier.phone!,
-              style: const TextStyle(fontSize: 12))
-          : null,
-      trailing: hasBalance
-          ? Text(
-              AppHelpers.formatCurrency(balance.abs()),
-              style: TextStyle(
-                  color: AppTheme.debitColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13),
-            )
-          : const Text('Settled',
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
     );
   }
 }

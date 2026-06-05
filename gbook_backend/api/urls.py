@@ -1,5 +1,7 @@
+# gbook_backend/api/urls.py
 """
 G-Book API URL Patterns
+Fixed: added FCMTokenRegisterView and FCMTokenUnregisterView imports
 """
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -37,4 +39,10 @@ urlpatterns = [
 
     # ─── Reminders ────────────────────────────────
     path('reminders/', views.ReminderListCreateView.as_view(), name='reminders'),
+
+    # ─── FCM Push Notifications ───────────────────
+    # FIX: These views are defined in views.py below.
+    # They are only active after: pip install firebase-admin + migrate
+    path('fcm/register/', views.FCMTokenRegisterView.as_view(), name='fcm-register'),
+    path('fcm/unregister/', views.FCMTokenUnregisterView.as_view(), name='fcm-unregister'),
 ]
