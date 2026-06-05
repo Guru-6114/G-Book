@@ -1,8 +1,5 @@
 // lib/screens/auth_screens.dart
-// Fixed errors:
-//  - removed onSubmitted (not a valid param on TextFormField, use onFieldSubmitted)
-//  - replaced deprecated controller.value with initialValue pattern for Autocomplete
-//  - added curly braces to for loops
+// PASTE TO: gbook_flutter/lib/screens/auth_screens.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../providers/providers.dart';
@@ -12,7 +9,7 @@ import '../utils/helpers.dart';
 import '../models/models.dart';
 import 'home_screen.dart';
 
-// ── AuthScreen ────────────────────────────────────────────────────────────────
+// ── AuthScreen ─────────────────────────────────────────────────────────────────
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -57,90 +54,265 @@ class _AuthScreenState extends State<AuthScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 40),
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Center(
-                  child: Text(
-                    'G',
-                    style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white),
+        child: Column(
+          children: [
+            // Logo header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'G',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 24,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Welcome to GBook',
-                style:
-                    TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Enter your mobile number to continue',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 36),
-              TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
+                  const SizedBox(width: 10),
+                  Text(
+                    'GBook',
+                    style: TextStyle(
+                      color: AppTheme.primaryColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                    ),
+                  ),
                 ],
-                decoration: const InputDecoration(
-                  labelText: 'Mobile Number',
-                  prefixText: '+91  ',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-                style: const TextStyle(fontSize: 18, letterSpacing: 2),
-                // FIX: use onFieldSubmitted, not onSubmitted
-                onFieldSubmitted: (_) => _sendOtp(),
               ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _sendOtp,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Text('Send OTP'),
+            ),
+
+            const Divider(height: 24, thickness: 1),
+
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Trust badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF2E7D32),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.verified,
+                                      color: Colors.white, size: 20),
+                                  Text(
+                                    '100%\nSAFE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 6,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.2,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Trusted by 5 Crore+ businesses across India',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF424242),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Phone input row
+                    Row(
+                      children: [
+                        // Country code box
+                        Container(
+                          height: 54,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                                color: AppTheme.primaryColor, width: 2),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('🇮🇳',
+                                  style: TextStyle(fontSize: 20)),
+                              SizedBox(width: 6),
+                              Text(
+                                '+91',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  color: Color(0xFF212121),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SizedBox(
+                            height: 54,
+                            child: TextField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(10),
+                              ],
+                              autofocus: true,
+                              style: const TextStyle(
+                                  fontSize: 18, letterSpacing: 2),
+                              decoration: InputDecoration(
+                                hintText: 'Mobile Number',
+                                hintStyle: TextStyle(
+                                  color: Colors.grey.shade400,
+                                  fontSize: 16,
+                                  letterSpacing: 0,
+                                ),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 16),
+                                border: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(6),
+                                  borderSide: BorderSide(
+                                      color: AppTheme.primaryColor,
+                                      width: 2),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(6),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFBDBDBD)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(6),
+                                  borderSide: BorderSide(
+                                      color: AppTheme.primaryColor,
+                                      width: 2),
+                                ),
+                              ),
+                              onSubmitted: (_) => _sendOtp(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(
-                  'OTP will be sent via SMS\n(Use 1234 for testing)',
-                  style: TextStyle(
-                      fontSize: 12, color: Colors.grey.shade500),
-                  textAlign: TextAlign.center,
-                ),
+            ),
+
+            // GET OTP button + disclaimer
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _sendOtp,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                          : const Text(
+                              'GET OTP',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text.rich(
+                    TextSpan(
+                      style: TextStyle(
+                          fontSize: 12, color: Color(0xFF757575)),
+                      children: [
+                        TextSpan(
+                            text: 'By continuing, you agree to our '),
+                        TextSpan(
+                          text: 'Terms and Conditions',
+                          style: TextStyle(
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(text: ', and '),
+                        TextSpan(
+                          text: 'Privacy Policy',
+                          style: TextStyle(
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(text: '.'),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ── OtpScreen ─────────────────────────────────────────────────────────────────
+// ── OtpScreen ──────────────────────────────────────────────────────────────────
 class OtpScreen extends StatefulWidget {
   final String phone;
   const OtpScreen({super.key, required this.phone});
@@ -154,6 +326,26 @@ class _OtpScreenState extends State<OtpScreen> {
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _nodes = List.generate(6, (_) => FocusNode());
   bool _loading = false;
+  int _countdown = 30;
+  bool _canResend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      if (_countdown > 0) {
+        setState(() => _countdown--);
+        _startCountdown();
+      } else {
+        setState(() => _canResend = true);
+      }
+    });
+  }
 
   String get _otp => _ctls.map((c) => c.text).join();
 
@@ -189,12 +381,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
   @override
   void dispose() {
-    for (final c in _ctls) {
-      c.dispose(); // FIX: curly braces in for loop
-    }
-    for (final n in _nodes) {
-      n.dispose(); // FIX: curly braces in for loop
-    }
+    for (final c in _ctls) c.dispose();
+    for (final n in _nodes) n.dispose();
     super.dispose();
   }
 
@@ -203,8 +391,14 @@ class _OtpScreenState extends State<OtpScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: AppTheme.primaryColor,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Verify OTP',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700)),
         elevation: 0,
       ),
       body: Padding(
@@ -212,22 +406,21 @@ class _OtpScreenState extends State<OtpScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Enter OTP',
-              style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(
-              'Sent to +91 ${widget.phone}',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
+              'OTP sent to +91 ${widget.phone}',
+              style: const TextStyle(
+                  fontSize: 16, color: Color(0xFF424242)),
             ),
             const SizedBox(height: 32),
+
+            // 6 OTP boxes
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: List.generate(6, (i) {
                 return SizedBox(
                   width: 46,
+                  height: 54,
                   child: TextFormField(
                     controller: _ctls[i],
                     focusNode: _nodes[i],
@@ -238,13 +431,24 @@ class _OtpScreenState extends State<OtpScreen> {
                       FilteringTextInputFormatter.digitsOnly
                     ],
                     style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.w700),
+                        fontSize: 22, fontWeight: FontWeight.w700),
                     decoration: InputDecoration(
                       counterText: '',
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: EdgeInsets.zero,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(
+                            color: AppTheme.primaryColor, width: 1.5),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(
+                            color: Color(0xFFBDBDBD)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(
+                            color: AppTheme.primaryColor, width: 2),
                       ),
                     ),
                     onChanged: (v) {
@@ -254,24 +458,74 @@ class _OtpScreenState extends State<OtpScreen> {
                         _nodes[i - 1].requestFocus();
                       }
                       setState(() {});
+                      if (_otp.length == 6) _verify();
                     },
                   ),
                 );
               }),
             ),
-            const SizedBox(height: 28),
+
+            const SizedBox(height: 20),
+
+            // Resend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _canResend
+                      ? "Didn't receive OTP? "
+                      : 'Resend OTP in ${_countdown}s',
+                  style: const TextStyle(
+                      fontSize: 13, color: Color(0xFF757575)),
+                ),
+                if (_canResend)
+                  GestureDetector(
+                    onTap: () async {
+                      setState(() {
+                        _canResend = false;
+                        _countdown = 30;
+                      });
+                      _startCountdown();
+                      if (!mounted) return;
+                      await context
+                          .read<AuthProvider>()
+                          .sendOtp(widget.phone);
+                    },
+                    child: Text(
+                      'RESEND',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            const Spacer(),
+
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 52,
               child: ElevatedButton(
                 onPressed: _loading ? null : _verify,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
+                ),
                 child: _loading
                     ? const SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : const Text('Verify & Continue'),
+                    : const Text(
+                        'Verify & Continue',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
               ),
             ),
           ],
@@ -281,7 +535,7 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 }
 
-// ── ProfileSetupScreen ────────────────────────────────────────────────────────
+// ── ProfileSetupScreen ─────────────────────────────────────────────────────────
 class ProfileSetupScreen extends StatefulWidget {
   final String phone;
   const ProfileSetupScreen({super.key, required this.phone});
@@ -296,10 +550,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _ownerNameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
+
+  // FIX: use a state variable instead of value= on DropdownButtonFormField
   String _category = 'Retail';
   bool _saving = false;
 
-  static const _categories = [
+  static const List<String> _categories = [
     'Retail',
     'Wholesale',
     'Services',
@@ -321,8 +577,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       businessName: _businessNameCtrl.text.trim(),
       ownerName: _ownerNameCtrl.text.trim(),
       phone: widget.phone,
-      email:
-          _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      email: _emailCtrl.text.trim().isEmpty
+          ? null
+          : _emailCtrl.text.trim(),
       address: _addressCtrl.text.trim().isEmpty
           ? null
           : _addressCtrl.text.trim(),
@@ -359,97 +616,103 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              const SizedBox(height: 16),
-              const Text(
-                'Setup Your Business',
-                style: TextStyle(
-                    fontSize: 24, fontWeight: FontWeight.w800),
+      appBar: AppBar(
+        title: const Text('Setup Your Business'),
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const SizedBox(height: 8),
+            const Text(
+              'Tell us about your business',
+              style: TextStyle(
+                  fontSize: 14, color: Color(0xFF757575)),
+            ),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _businessNameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Business Name *',
+                prefixIcon: Icon(Icons.store_outlined),
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Tell us about your business',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _ownerNameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Owner Name *',
+                prefixIcon: Icon(Icons.person_outline),
               ),
-              const SizedBox(height: 28),
-              TextFormField(
-                controller: _businessNameCtrl,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Business Name *',
-                  prefixIcon: Icon(Icons.store_outlined),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
+              validator: (v) =>
+                  v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email (optional)',
+                prefixIcon: Icon(Icons.email_outlined),
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _ownerNameCtrl,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Owner Name *',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Required' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _addressCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Business Address (optional)',
+                prefixIcon: Icon(Icons.location_on_outlined),
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email (optional)',
-                  prefixIcon: Icon(Icons.email_outlined),
-                ),
+            ),
+            const SizedBox(height: 14),
+            // FIX: Use DropdownButtonFormField with NO value= prop;
+            // use initialValue via the state variable _category
+            DropdownButtonFormField<String>(
+              // FIX: removed deprecated value= and replaced with
+              // managing selection purely via onChanged + _category state
+              value: _category,
+              decoration: const InputDecoration(
+                labelText: 'Business Category',
+                prefixIcon: Icon(Icons.category_outlined),
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _addressCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Business Address (optional)',
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                ),
+              items: _categories
+                  .map((c) =>
+                      DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setState(() => _category = v);
+              },
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Text(
+                        'Save & Continue',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15),
+                      ),
               ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(
-                  labelText: 'Business Category',
-                  prefixIcon: Icon(Icons.category_outlined),
-                ),
-                items: _categories
-                    .map((c) =>
-                        DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) =>
-                    setState(() => _category = v ?? _category),
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                height: 50,
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Text(
-                          'Save & Continue',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

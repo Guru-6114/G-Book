@@ -1,5 +1,5 @@
 // lib/screens/language_screen.dart
-// Matches Khatabook language selection UI (Image 8)
+// PASTE TO: gbook_flutter/lib/screens/language_screen.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
@@ -15,7 +15,7 @@ class LanguageScreen extends StatefulWidget {
 class _LanguageScreenState extends State<LanguageScreen> {
   String _selected = 'en';
 
-  static const _languages = [
+  static const List<Map<String, String>> _languages = [
     {'code': 'en', 'label': 'English', 'abbr': 'E'},
     {'code': 'hi', 'label': 'हिंदी', 'abbr': 'हि'},
     {'code': 'hin', 'label': 'Hinglish', 'abbr': 'H'},
@@ -49,7 +49,8 @@ class _LanguageScreenState extends State<LanguageScreen> {
             Container(
               width: double.infinity,
               color: AppTheme.primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   Container(
@@ -80,7 +81,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                     ),
                   ),
                   const Spacer(),
-                  // Language dropdown (top right)
+                  // Language display (top right)
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
@@ -157,10 +158,8 @@ class _LanguageScreenState extends State<LanguageScreen> {
                                   Container(
                                     width: 32,
                                     height: 32,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? AppTheme.primaryColor
-                                          : AppTheme.primaryColor,
+                                    decoration: const BoxDecoration(
+                                      color: AppTheme.primaryColor,
                                       shape: BoxShape.circle,
                                     ),
                                     child: Center(
@@ -175,16 +174,19 @@ class _LanguageScreenState extends State<LanguageScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    lang['label']!,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                      color: isSelected
-                                          ? AppTheme.primaryColor
-                                          : const Color(0xFF212121),
+                                  Flexible(
+                                    child: Text(
+                                      lang['label']!,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: isSelected
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                        color: isSelected
+                                            ? AppTheme.primaryColor
+                                            : const Color(0xFF212121),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
