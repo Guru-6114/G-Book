@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/providers.dart';
@@ -9,19 +8,17 @@ import 'screens/customer_screen.dart';
 import 'models/models.dart';
 import 'theme/app_theme.dart';
 
-// ── Firebase imports (safe — only used after flutter pub get) ──────────────────
-// These are wrapped so the app still compiles even before Firebase is set up.
-// Once you run: flutter pub get + flutterfire configure, uncomment block B below
-// and delete block A.
-
 // ── BLOCK A: No Firebase yet (use this until flutterfire configure is done) ───
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const GBookApp());
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-// ── BLOCK B: With Firebase (uncomment AFTER flutterfire configure) ────────────
+// ── BLOCK B: With Firebase — uncomment AFTER running:
+//   flutter pub get
+//   flutterfire configure
+// Then delete Block A above and uncomment everything below.
+//
 // import 'package:firebase_core/firebase_core.dart';
 // import 'firebase_options.dart';
 // import 'services/fcm_service.dart';
@@ -34,7 +31,6 @@ void main() {
 //   await FcmService().initialize();
 //   runApp(const GBookApp());
 // }
-// ─────────────────────────────────────────────────────────────────────────────
 
 class GBookApp extends StatelessWidget {
   const GBookApp({super.key});

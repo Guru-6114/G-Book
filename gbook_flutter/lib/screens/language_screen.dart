@@ -1,5 +1,4 @@
 // lib/screens/language_screen.dart
-// PASTE TO: gbook_flutter/lib/screens/language_screen.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
@@ -9,7 +8,11 @@ class LanguageScreen extends StatefulWidget {
   const LanguageScreen({super.key});
 
   @override
-  State<LanguageScreen> createState() => _LanguageScreenState();
+  // ignore: library_private_types_in_public_api
+  _LanguageScreenState createState() => _LanguageScreenState();
+}
+
+class LanguageScreenState {
 }
 
 class _LanguageScreenState extends State<LanguageScreen> {
@@ -32,9 +35,17 @@ class _LanguageScreenState extends State<LanguageScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('language', _selected);
     if (!mounted) return;
+    // FIX: Added onComplete callback parameter
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const PermissionsScreen()),
+      MaterialPageRoute(
+        builder: (_) => PermissionsScreen(
+          onComplete: () {
+            // Navigate to home or next screen after permissions
+            Navigator.pop(context);
+          },
+        ),
+      ),
     );
   }
 
@@ -60,7 +71,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Center(
+                    child: const Center(
                       child: Text(
                         'G',
                         style: TextStyle(
@@ -123,7 +134,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Language grid
+                    // Language grid - FIX: Add const to containers
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: GridView.count(

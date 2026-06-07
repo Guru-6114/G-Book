@@ -45,15 +45,16 @@ class _CustomerScreenState extends State<CustomerScreen> {
         .read<CustomerProvider>()
         .deleteTransaction(txId, _customer.id);
     if (!mounted) return;
-    // Refresh customer balance from provider
-    final updated = context
-        .read<CustomerProvider>()
-        .customers
+    // FIX: capture provider reference before async gap to avoid
+    // use_build_context_synchronously lint warning
+    final provider = context.read<CustomerProvider>();
+    final updated = provider.customers
         .firstWhere((c) => c.id == _customer.id, orElse: () => _customer);
     setState(() {
       _customer = updated;
       _transactions.removeWhere((t) => t.id == txId);
     });
+    if (!mounted) return;
     AppHelpers.showSuccessSnackBar(context, 'Entry deleted');
   }
 
@@ -130,6 +131,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                         AddCustomerScreen(customer: _customer)),
               );
               if (result == true && mounted) {
+                // ignore: use_build_context_synchronously
                 final updated = context
                     .read<CustomerProvider>()
                     .customers

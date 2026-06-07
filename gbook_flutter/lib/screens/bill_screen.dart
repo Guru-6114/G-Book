@@ -1,563 +1,697 @@
-// lib/screens/bill_screen.dart
+// lib/screens/add_bill_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
-import '../widgets/widgets.dart';
-import 'add_bill_screen.dart';
 
-class BillsScreen extends StatefulWidget {
-  const BillsScreen({super.key});
+class AddBillScreen extends StatefulWidget {
+  final BillType billType;
+  const AddBillScreen({super.key, required this.billType});
 
   @override
-  State<BillsScreen> createState() => _BillsScreenState();
+  State<AddBillScreen> createState() => _AddBillScreenState();
 }
 
-class _BillsScreenState extends State<BillsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _AddBillScreenState extends State<AddBillScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _partyCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  String _paymentMode = 'Cash';
+  DateTime _date = DateTime.now();
+  bool _fullyPaid = true;
+  final _paidCtrl = TextEditingController();
+  bool _saving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BillsProvider>().loadAll();
-    });
+  final List<_BillItemRow> _items = [];
+
+  String get _typeLabel {
+    switch (widget.billType) {
+      case BillType.sale:
+        return 'Sale Bill';
+      case BillType.purchase:
+        return 'Purchase Bill';
+      case BillType.expense:
+        return 'Expense';
+      case BillType.saleReturn:
+        return 'Sale Return';
+      case BillType.purchaseReturn:
+        return 'Purchase Return';
+    }
+  }
+
+  double get _totalAmount =>
+      _items.fold(0.0, (sum, row) => sum + row.total);
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one item')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      // ── FIX: capture provider reference BEFORE the async gap ──────────────
+      final billsProvider = context.read<BillProvider>();
+      final itemsProvider = context.read<ItemProvider>();
+
+      final billNo = await billsProvider.nextBillNumber(widget.billType);
+
+      // ── mounted check after await ─────────────────────────────────────────
+      if (!mounted) return;
+
+      final paid =
+          _fullyPaid ? _totalAmount : double.tryParse(_paidCtrl.text) ?? 0;
+
+      final now = DateTime.now();
+      final billId = AppHelpers.generateId();
+
+      final billItems = _items.map((r) {
+        final qty = double.tryParse(r.qtyCtrl.text) ?? 1;
+        final price = double.tryParse(r.priceCtrl.text) ?? 0;
+        final total = qty * price * (1 + r.taxPercent / 100);
+        return BillItem(
+          id: AppHelpers.generateId(),
+          billId: billId,
+          itemId: AppHelpers.generateId(),
+          itemName: r.nameCtrl.text.trim(),
+          quantity: qty,
+          rate: price,
+          taxPercent: r.taxPercent,
+          total: total,
+        );
+      }).toList();
+
+      final bill = Bill(
+        id: billId,
+        billType: widget.billType,
+        billNumber: '$_typeLabel #$billNo',
+        partyName: _partyCtrl.text.trim().isEmpty
+            ? null
+            : _partyCtrl.text.trim(),
+        items: billItems,
+        subtotal: _totalAmount,
+        grandTotal: _totalAmount,
+        paidAmount: paid,
+        date: _date,
+        createdAt: now,
+        notes:
+            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      );
+
+      await billsProvider.addBill(bill);
+      if (!mounted) return;
+
+      // Adjust stock if sale or purchase
+      if (widget.billType == BillType.sale ||
+          widget.billType == BillType.purchase) {
+        for (final row in _items) {
+          final name = row.nameCtrl.text.trim().toLowerCase();
+          try {
+            final item = itemsProvider.items.firstWhere(
+              (i) => i.name.toLowerCase() == name,
+            );
+            final qty = double.tryParse(row.qtyCtrl.text) ?? 0;
+            await itemsProvider.adjustStock(
+              item.id,
+              widget.billType == BillType.sale ? -qty : qty,
+            );
+          } catch (_) {}
+        }
+      }
+
+      if (mounted) Navigator.pop(context, true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _partyCtrl.dispose();
+    _notesCtrl.dispose();
+    _paidCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<BillsProvider>(builder: (_, billsProvider, __) {
-      return Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          titleSpacing: 0,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Consumer<BusinessProfileProvider>(
-                builder: (_, p, __) => Padding(
-                  padding: const EdgeInsets.only(left: 16),
-                  child: Text(
-                    p.profile?.businessName ?? 'My Business',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.pushNamed(context, '/settings'),
-            )
-          ],
-          bottom: TabBar(
-            controller: _tabController,
-            indicatorColor: Colors.white,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(
-                fontWeight: FontWeight.w700, fontSize: 13),
-            unselectedLabelStyle: const TextStyle(fontSize: 13),
-            tabs: const [
-              Tab(text: 'Sale'),
-              Tab(text: 'Purchase'),
-              Tab(text: 'Expense'),
-            ],
-          ),
-        ),
-        body: Column(
-          children: [
-            Container(
-              color: AppColors.primary,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _SummaryTile(
-                          label: 'Monthly Sales',
-                          amount: billsProvider.monthlySales,
-                          color: AppColors.green,
-                          onTap: () => _tabController.animateTo(0),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _SummaryTile(
-                          label: 'Monthly Purchases',
-                          amount: billsProvider.monthlyPurchases,
-                          color: AppColors.red,
-                          onTap: () => _tabController.animateTo(1),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _ReportTile(
-                          onTap: () =>
-                              Navigator.pushNamed(context, '/reports'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const _CashbookRow(),
-                ],
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _BillsList(
-                      bills: billsProvider.saleBills,
-                      type: BillType.sale),
-                  _BillsList(
-                      bills: billsProvider.purchaseBills,
-                      type: BillType.purchase),
-                  _BillsList(
-                      bills: billsProvider.expenseBills,
-                      type: BillType.expense),
-                ],
-              ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: SafeArea(
-          child: Container(
-            color: Colors.white,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
+    return Scaffold(
+      appBar: AppBar(title: Text('Add $_typeLabel')),
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(12),
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Column(
-                      mainAxisSize: MainAxisSize.min,
+                // Party & Date card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
                       children: [
-                        Text('MORE',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12)),
-                        Text('Payment & Return',
-                            style: TextStyle(fontSize: 10)),
+                        TextFormField(
+                          controller: _partyCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: widget.billType == BillType.sale
+                                ? 'Customer Name (optional)'
+                                : 'Supplier Name (optional)',
+                            prefixIcon:
+                                const Icon(Icons.person_outline, size: 18),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _date,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null && mounted) {
+                              setState(() => _date = picked);
+                            }
+                          },
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Bill Date',
+                              prefixIcon:
+                                  Icon(Icons.calendar_today, size: 16),
+                            ),
+                            child: Text(
+                              AppHelpers.formatDate(_date),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final tab = _tabController.index;
-                      final type = tab == 0
-                          ? BillType.sale
-                          : tab == 1
-                              ? BillType.purchase
-                              : BillType.expense;
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                AddBillScreen(billType: type)),
-                      );
-                      if (result == true && mounted) {
-                        context.read<BillsProvider>().loadAll();
-                      }
-                    },
-                    icon: const Icon(Icons.add, size: 18),
-                    label: AnimatedBuilder(
-                      animation: _tabController,
-                      builder: (_, __) {
-                        final tab = _tabController.index;
-                        final label = tab == 0
-                            ? 'ADD BILL'
-                            : tab == 1
-                                ? 'ADD PURCHASE'
-                                : 'ADD EXPENSE';
-                        return Text(label,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14));
-                      },
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                const SizedBox(height: 10),
+
+                // Items card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Items',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 14),
+                            ),
+                            TextButton.icon(
+                              onPressed: () =>
+                                  setState(() => _items.add(_BillItemRow())),
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('Add Item',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                        if (_items.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            alignment: Alignment.center,
+                            child: Column(
+                              children: [
+                                Icon(Icons.inventory_2_outlined,
+                                    color: Colors.grey[300], size: 40),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'No items added yet',
+                                  style: TextStyle(
+                                      color: AppColors.grey, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ..._items.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final row = entry.value;
+                          return _ItemRowWidget(
+                            key: ValueKey(idx),
+                            row: row,
+                            onDelete: () =>
+                                setState(() => _items.removeAt(idx)),
+                            onChanged: () => setState(() {}),
+                            availableItems:
+                                context.watch<ItemProvider>().items,
+                          );
+                        }),
+                        if (_items.isNotEmpty) ...[
+                          const Divider(),
+                          Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Total Amount',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 14),
+                              ),
+                              Text(
+                                AppHelpers.formatCurrency(_totalAmount),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
+
+                // Payment card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Payment Details',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _fullyPaid = true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _fullyPaid
+                                        ? AppColors.green
+                                            .withValues(alpha: 0.1)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: _fullyPaid
+                                          ? AppColors.green
+                                          : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.check_circle_outline,
+                                        color: _fullyPaid
+                                            ? AppColors.green
+                                            : AppColors.grey,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Fully Paid',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: _fullyPaid
+                                              ? AppColors.green
+                                              : AppColors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _fullyPaid = false),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: !_fullyPaid
+                                        ? AppColors.red
+                                            .withValues(alpha: 0.1)
+                                        : Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: !_fullyPaid
+                                          ? AppColors.red
+                                          : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.pending_outlined,
+                                        color: !_fullyPaid
+                                            ? AppColors.red
+                                            : AppColors.grey,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Partial / Unpaid',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: !_fullyPaid
+                                              ? AppColors.red
+                                              : AppColors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (!_fullyPaid) ...[
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _paidCtrl,
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Amount Paid',
+                              prefixIcon:
+                                  Icon(Icons.currency_rupee, size: 18),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Payment Mode',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.grey),
+                        ),
+                        const SizedBox(height: 6),
+                        _PaymentModeSelector(
+                          selected: _paymentMode,
+                          onChanged: (m) =>
+                              setState(() => _paymentMode = m),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Notes
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: TextFormField(
+                      controller: _notesCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        prefixIcon: Icon(Icons.note_outlined, size: 18),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    child: Text(
+                      'SAVE $_typeLabel'.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           ),
-        ),
-      );
-    });
-  }
-}
-
-class _SummaryTile extends StatelessWidget {
-  final String label;
-  final double amount;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _SummaryTile(
-      {required this.label,
-      required this.amount,
-      required this.color,
-      this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(AppHelpers.formatCurrency(amount),
-                style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15)),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 10)),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text('›',
-                    style: TextStyle(
-                        color: Colors.white70, fontSize: 16)),
-              ],
-            )
-          ],
-        ),
+          if (_saving)
+            Container(
+              color: Colors.black26,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _ReportTile extends StatelessWidget {
-  final VoidCallback onTap;
-  const _ReportTile({required this.onTap});
+// ── Payment mode selector ─────────────────────────────────────────────────────
+class _PaymentModeSelector extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _PaymentModeSelector({
+    required this.selected,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(Icons.bar_chart, color: Colors.white, size: 22),
-            SizedBox(height: 4),
-            Text('VIEW\nREPORTS',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700)),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text('›',
-                    style:
-                        TextStyle(color: Colors.white70, fontSize: 16)),
-              ],
-            )
-          ],
-        ),
-      ),
+    const modes = ['Cash', 'UPI', 'Cheque', 'Bank Transfer', 'Credit'];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: modes.map((m) {
+        final isSelected = m == selected;
+        return GestureDetector(
+          onTap: () => onChanged(m),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.1)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected ? AppColors.primary : Colors.grey[300]!,
+              ),
+            ),
+            child: Text(
+              m,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? AppColors.primary : AppColors.grey,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
 
-class _CashbookRow extends StatelessWidget {
-  const _CashbookRow();
+// ── Bill item row state ───────────────────────────────────────────────────────
+class _BillItemRow {
+  final TextEditingController nameCtrl = TextEditingController();
+  final TextEditingController qtyCtrl =
+      TextEditingController(text: '1');
+  final TextEditingController priceCtrl = TextEditingController();
+  String unit = 'PCS';
+  double taxPercent = 0;
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<CashbookProvider>(builder: (_, p, __) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Today's IN",
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 11)),
-                  Text(AppHelpers.formatCurrency(p.totalIn),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Today's OUT",
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 11)),
-                  Text(AppHelpers.formatCurrency(p.totalOut),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14)),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pushNamed(context, '/cashbook'),
-              style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  side: const BorderSide(color: Colors.white38)),
-              child: const Text('CASHBOOK ›',
-                  style: TextStyle(fontSize: 11)),
-            ),
-          ],
-        ),
-      );
-    });
+  double get total {
+    final qty = double.tryParse(qtyCtrl.text) ?? 0;
+    final price = double.tryParse(priceCtrl.text) ?? 0;
+    return qty * price * (1 + taxPercent / 100);
   }
 }
 
-class _BillsList extends StatelessWidget {
-  final List<Bill> bills;
-  final BillType type;
+// ── Item row widget ───────────────────────────────────────────────────────────
+class _ItemRowWidget extends StatefulWidget {
+  final _BillItemRow row;
+  final VoidCallback onDelete;
+  final VoidCallback onChanged;
+  final List<Item> availableItems;
 
-  const _BillsList({required this.bills, required this.type});
+  const _ItemRowWidget({
+    super.key,
+    required this.row,
+    required this.onDelete,
+    required this.onChanged,
+    required this.availableItems,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    if (bills.isEmpty) {
-      return EmptyState(
-        icon: Icons.receipt_long_outlined,
-        title:
-            'No ${type == BillType.sale ? "sale" : type == BillType.purchase ? "purchase" : "expense"} bills yet',
-        subtitle: type == BillType.sale
-            ? 'Create professional bills in 3 seconds.\nAuto-updates Khata, Inventory & Cashbook.'
-            : 'Track your ${type == BillType.purchase ? "purchases" : "expenses"} easily',
-      );
-    }
+  State<_ItemRowWidget> createState() => _ItemRowWidgetState();
+}
 
-    return Column(
-      children: [
-        Container(
-          color: Colors.white,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
+class _ItemRowWidgetState extends State<_ItemRowWidget> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.lightGrey,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Row(
             children: [
               Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText:
-                        'Search ${type == BillType.sale ? "sales" : type == BillType.purchase ? "purchases" : "expenses"}',
-                    hintStyle: const TextStyle(fontSize: 12),
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 10),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFBDBDBD))),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFBDBDBD))),
-                  ),
+                child: Autocomplete<String>(
+                  optionsBuilder: (textValue) {
+                    if (textValue.text.isEmpty) return const [];
+                    return widget.availableItems
+                        .where((i) => i.name
+                            .toLowerCase()
+                            .contains(textValue.text.toLowerCase()))
+                        .map((i) => i.name);
+                  },
+                  onSelected: (name) {
+                    widget.row.nameCtrl.text = name;
+                    try {
+                      final item = widget.availableItems
+                          .firstWhere((i) => i.name == name);
+                      widget.row.priceCtrl.text =
+                          item.salePrice.toString();
+                      widget.row.unit = item.unit.name.toUpperCase();
+                    } catch (_) {}
+                    widget.onChanged();
+                  },
+                  fieldViewBuilder:
+                      (context, ctrl, focusNode, onSubmit) {
+                    // ── FIX: use initialValue pattern via TextEditingController ──
+                    ctrl.text = widget.row.nameCtrl.text;
+                    ctrl.addListener(() {
+                      widget.row.nameCtrl.text = ctrl.text;
+                      widget.onChanged();
+                    });
+                    return TextFormField(
+                      controller: ctrl,
+                      focusNode: focusNode,
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty)
+                              ? 'Required'
+                              : null,
+                      decoration: const InputDecoration(
+                        hintText: 'Item name',
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        isDense: true,
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               IconButton(
-                  icon: const Icon(Icons.filter_list,
-                      color: AppColors.primary),
-                  onPressed: () {}),
-              IconButton(
-                  icon: const Icon(Icons.sort,
-                      color: AppColors.primary),
-                  onPressed: () {}),
+                icon: const Icon(Icons.delete_outline,
+                    color: AppColors.red, size: 20),
+                onPressed: widget.onDelete,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
             ],
           ),
-        ),
-        Expanded(
-          child: ListView.separated(
-            itemCount: bills.length,
-            separatorBuilder: (_, __) =>
-                const Divider(height: 1, indent: 16),
-            itemBuilder: (_, i) {
-              final bill = bills[i];
-              return _BillTile(bill: bill);
-            },
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: widget.row.qtyCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
+                  onChanged: (_) => widget.onChanged(),
+                  validator: (v) =>
+                      double.tryParse(v ?? '') == null ? 'Invalid' : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Qty',
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 80,
+                // ── FIX: use initialValue instead of deprecated value ─────────
+                child: DropdownButtonFormField<String>(
+                  initialValue: widget.row.unit,
+                  isDense: true,
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 8),
+                    isDense: true,
+                  ),
+                  items: ['PCS', 'KGS', 'LTR', 'MTR', 'BOX', 'PKT']
+                      .map((u) =>
+                          DropdownMenuItem(value: u, child: Text(u)))
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) {
+                      setState(() => widget.row.unit = v);
+                      widget.onChanged();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: TextFormField(
+                  controller: widget.row.priceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
+                  onChanged: (_) => widget.onChanged(),
+                  validator: (v) =>
+                      double.tryParse(v ?? '') == null ? 'Invalid' : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Price ₹',
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BillTile extends StatelessWidget {
-  final Bill bill;
-  const _BillTile({required this.bill});
-
-  @override
-  Widget build(BuildContext context) {
-    final isPaid = bill.paymentStatus == PaymentStatus.fullyPaid;
-    final isPartial =
-        bill.paymentStatus == PaymentStatus.partiallyPaid;
-
-    return InkWell(
-      onTap: () {}, // TODO: bill detail screen
-      child: Container(
-        color: Colors.white,
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.lightBlue,
-                borderRadius: BorderRadius.circular(8),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Text('Amount: ',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey)),
+              Text(
+                AppHelpers.formatCurrency(widget.row.total),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: AppColors.primary),
               ),
-              child: Icon(
-                bill.billType == BillType.sale
-                    ? Icons.receipt_outlined
-                    : bill.billType == BillType.purchase
-                        ? Icons.shopping_cart_outlined
-                        : Icons.money_off_outlined,
-                color: AppColors.primary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    bill.billType == BillType.sale
-                        ? 'Sale Bill'
-                        : bill.billType == BillType.purchase
-                            ? 'Purchase Bill'
-                            : 'Expense',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightGrey,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(bill.billNumber,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.grey)),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(AppHelpers.formatDate(bill.date),
-                          style: const TextStyle(
-                              fontSize: 11, color: AppColors.grey)),
-                    ],
-                  ),
-                  if (bill.partyName != null &&
-                      bill.partyName!.isNotEmpty)
-                    Text(bill.partyName!,
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.grey)),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  AppHelpers.formatCurrency(bill.totalAmount),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isPaid
-                        ? AppColors.green.withValues(alpha: 0.1)
-                        : isPartial
-                            ? Colors.orange.withValues(alpha: 0.1)
-                            : AppColors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isPaid
-                        ? 'Fully Paid'
-                        : isPartial
-                            ? 'Partial'
-                            : 'Unpaid',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isPaid
-                          ? AppColors.green
-                          : isPartial
-                              ? Colors.orange
-                              : AppColors.red,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

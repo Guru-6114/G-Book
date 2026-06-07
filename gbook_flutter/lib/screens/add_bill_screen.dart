@@ -56,6 +56,7 @@ class _AddBillScreenState extends State<AddBillScreen> {
     setState(() => _saving = true);
     try {
       final billsProvider = context.read<BillProvider>();
+      final itemsProvider = context.read<ItemProvider>();
       final billNo = await billsProvider.nextBillNumber(widget.billType);
 
       final paid =
@@ -71,7 +72,7 @@ class _AddBillScreenState extends State<AddBillScreen> {
         return BillItem(
           id: AppHelpers.generateId(),
           billId: billId,
-          itemId: AppHelpers.generateId(), // placeholder if not linked
+          itemId: AppHelpers.generateId(),
           itemName: r.nameCtrl.text.trim(),
           quantity: qty,
           rate: price,
@@ -98,11 +99,13 @@ class _AddBillScreenState extends State<AddBillScreen> {
 
       await billsProvider.addBill(bill);
 
-      // Adjust stock if sale or purchase
+      // Adjust stock if sale or purchase — check mounted before using context
+      if (!mounted) return;
       if (widget.billType == BillType.sale ||
           widget.billType == BillType.purchase) {
-        final itemsProvider = context.read<ItemProvider>();
-        for (final row in _items) {
+        final currentItems = List<_BillItemRow>.from(_items);
+        final currentType = widget.billType;
+        for (final row in currentItems) {
           final name = row.nameCtrl.text.trim().toLowerCase();
           try {
             final item = itemsProvider.items.firstWhere(
@@ -111,7 +114,7 @@ class _AddBillScreenState extends State<AddBillScreen> {
             final qty = double.tryParse(row.qtyCtrl.text) ?? 0;
             await itemsProvider.adjustStock(
               item.id,
-              widget.billType == BillType.sale ? -qty : qty,
+              currentType == BillType.sale ? -qty : qty,
             );
           } catch (_) {}
         }
@@ -634,7 +637,7 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
               SizedBox(
                 width: 80,
                 child: DropdownButtonFormField<String>(
-                  value: widget.row.unit,
+                  initialValue: widget.row.unit,
                   isDense: true,
                   decoration: const InputDecoration(
                     contentPadding: EdgeInsets.symmetric(

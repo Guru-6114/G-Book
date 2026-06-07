@@ -1,6 +1,6 @@
 // lib/providers/providers.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// All providers for GBook app
+// All providers for GBook app — fixed to match models.dart exactly
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
@@ -18,7 +18,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  // Aliases used by profile_screen
+  // Aliases used by profile_screen and parties_screen
   BusinessProfile? get user => _profile;
   BusinessProfile? get business => _profile;
 
@@ -26,8 +26,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final db = LocalDatabase.instance;
-      final p = await db.getBusinessProfile();
+      final p = await LocalDatabase.instance.getBusinessProfile();
       if (p != null) {
         _profile = p;
         _isAuthenticated = true;
@@ -57,8 +56,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = false;
     final valid = otp == '1234' || otp.length == 6;
     if (valid) {
-      final db = LocalDatabase.instance;
-      final existing = await db.getBusinessProfile();
+      final existing = await LocalDatabase.instance.getBusinessProfile();
       if (existing != null) {
         _profile = existing;
         _isAuthenticated = true;
@@ -73,8 +71,7 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      final db = LocalDatabase.instance;
-      await db.saveBusinessProfile(p);
+      await LocalDatabase.instance.saveBusinessProfile(p);
       _profile = p;
       _isAuthenticated = true;
     } catch (e) {
@@ -85,7 +82,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Update profile from a Map<String,dynamic> — called by profile_screen
+  /// Update personal info — called by profile_screen
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     if (_profile == null) return false;
     _error = null;
@@ -104,7 +101,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Update business info from a Map<String,dynamic> — called by profile_screen
+  /// Update business info — called by profile_screen
   Future<bool> updateBusiness(Map<String, dynamic> data) async {
     if (_profile == null) return false;
     _error = null;
@@ -132,7 +129,6 @@ class AuthProvider extends ChangeNotifier {
 }
 
 // ── CustomerProvider ──────────────────────────────────────────────────────────
-// Canonical name. Also exposed as CustomersProvider alias below.
 class CustomerProvider extends ChangeNotifier {
   final List<Customer> _customers = [];
   final Map<String, List<CustomerTransaction>> _txMap = {};
@@ -175,8 +171,8 @@ class CustomerProvider extends ChangeNotifier {
   Future<List<CustomerTransaction>> getTransactions(
       String customerId) async {
     try {
-      final list =
-          await LocalDatabase.instance.getCustomerTransactions(customerId);
+      final list = await LocalDatabase.instance
+          .getCustomerTransactions(customerId);
       _txMap[customerId] = list;
       notifyListeners();
       return list;
@@ -212,6 +208,7 @@ class CustomerProvider extends ChangeNotifier {
     final idx = _customers.indexWhere((c) => c.id == tx.customerId);
     if (idx != -1) {
       final current = _customers[idx];
+      // isGiven=true means money went OUT (customer owes more)
       final delta = tx.isGiven ? tx.amount : -tx.amount;
       _customers[idx] =
           current.copyWith(balance: current.balance + delta);
@@ -253,7 +250,7 @@ class CustomerProvider extends ChangeNotifier {
 // Alias so any screen using CustomersProvider still works
 typedef CustomersProvider = CustomerProvider;
 
-// ── TransactionProvider (Cashbook) ────────────────────────────────────────────
+// ── TransactionProvider (App-level cashbook ledger) ───────────────────────────
 class TransactionProvider extends ChangeNotifier {
   final List<AppTransaction> _transactions = [];
   bool _loading = false;
@@ -263,6 +260,7 @@ class TransactionProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
+  // isIncome=true → cash IN (received money)
   double get totalIn => _transactions
       .where((t) => t.isIncome)
       .fold(0.0, (s, t) => s + t.amount);
@@ -325,9 +323,9 @@ class TransactionProvider extends ChangeNotifier {
       double credit = 0, debit = 0;
       for (final t in all) {
         if (t.isIncome) {
-          debit += t.amount;
+          debit += t.amount; // received
         } else {
-          credit += t.amount;
+          credit += t.amount; // given
         }
       }
       return MonthlyReport(
@@ -345,7 +343,6 @@ class TransactionProvider extends ChangeNotifier {
 }
 
 // ── SupplierProvider ──────────────────────────────────────────────────────────
-// Canonical name. Also exposed as SuppliersProvider alias below.
 class SupplierProvider extends ChangeNotifier {
   final List<Supplier> _suppliers = [];
   bool _loading = false;
@@ -397,7 +394,6 @@ class SupplierProvider extends ChangeNotifier {
 typedef SuppliersProvider = SupplierProvider;
 
 // ── ItemProvider ──────────────────────────────────────────────────────────────
-// Canonical name. Also exposed as ItemsProvider alias below.
 class ItemProvider extends ChangeNotifier {
   final List<Item> _items = [];
   bool _loading = false;
@@ -455,7 +451,6 @@ class ItemProvider extends ChangeNotifier {
 typedef ItemsProvider = ItemProvider;
 
 // ── BillProvider ──────────────────────────────────────────────────────────────
-// Canonical name. Also exposed as BillsProvider alias below.
 class BillProvider extends ChangeNotifier {
   final List<Bill> _bills = [];
   bool _loading = false;
@@ -478,14 +473,16 @@ class BillProvider extends ChangeNotifier {
   double get monthlySales {
     final now = DateTime.now();
     return saleBills
-        .where((b) => b.date.month == now.month && b.date.year == now.year)
+        .where(
+            (b) => b.date.month == now.month && b.date.year == now.year)
         .fold(0.0, (s, b) => s + b.grandTotal);
   }
 
   double get monthlyPurchases {
     final now = DateTime.now();
     return purchaseBills
-        .where((b) => b.date.month == now.month && b.date.year == now.year)
+        .where(
+            (b) => b.date.month == now.month && b.date.year == now.year)
         .fold(0.0, (s, b) => s + b.grandTotal);
   }
 
@@ -546,6 +543,7 @@ class CashbookProvider extends ChangeNotifier {
   List<CashbookEntry> get entries => List.unmodifiable(_entries);
   bool get loading => _loading;
 
+  // CashbookEntry uses isCashIn (not .type)
   double get totalIn => _entries
       .where((e) => e.isCashIn)
       .fold(0.0, (s, e) => s + e.amount);

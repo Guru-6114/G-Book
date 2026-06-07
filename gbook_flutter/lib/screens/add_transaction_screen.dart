@@ -104,7 +104,7 @@ class _AddTransactionScreenState
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text(
+        title: const Text(
           'Add Transaction',
           style: TextStyle(
             color: AppTheme.textPrimary,
@@ -112,7 +112,7 @@ class _AddTransactionScreenState
             fontWeight: FontWeight.w600,
           ),
         ),
-        iconTheme: IconThemeData(color: AppTheme.textPrimary),
+        iconTheme: const IconThemeData(color: AppTheme.textPrimary),
         elevation: 1,
       ),
       body: Form(
@@ -129,11 +129,11 @@ class _AddTransactionScreenState
               ),
               child: Row(
                 children: [
-                  Icon(Icons.person, color: AppTheme.primary, size: 20),
+                  const Icon(Icons.person, color: AppTheme.primary, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     widget.customerName,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AppTheme.primary,
                       fontWeight: FontWeight.w600,
                     ),
@@ -144,7 +144,7 @@ class _AddTransactionScreenState
             const SizedBox(height: 20),
 
             // Type selector
-            Text(
+            const Text(
               'Transaction Type',
               style: TextStyle(
                   color: AppTheme.textSecondary,
@@ -184,7 +184,7 @@ class _AddTransactionScreenState
               controller: _amountCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              style: TextStyle(
+              style: const TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.w600),
@@ -219,16 +219,16 @@ class _AddTransactionScreenState
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_today,
+                    const Icon(Icons.calendar_today,
                         color: AppTheme.textSecondary, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         AppHelpers.formatDate(_date),
-                        style: TextStyle(color: AppTheme.textPrimary),
+                        style: const TextStyle(color: AppTheme.textPrimary),
                       ),
                     ),
-                    Icon(Icons.chevron_right,
+                    const Icon(Icons.chevron_right,
                         color: AppTheme.textSecondary, size: 20),
                   ],
                 ),
@@ -236,16 +236,16 @@ class _AddTransactionScreenState
             ),
             const SizedBox(height: 16),
 
-            // Payment mode
+            // Payment mode — use initialValue instead of deprecated value=
             DropdownButtonFormField<String>(
-              value: _paymentMode,
+              initialValue: _paymentMode,
               items: _paymentModes
                   .map((m) =>
                       DropdownMenuItem(value: m, child: Text(m)))
                   .toList(),
               onChanged: (v) =>
                   setState(() => _paymentMode = v ?? 'Cash'),
-              style: TextStyle(color: AppTheme.textPrimary),
+              style: const TextStyle(color: AppTheme.textPrimary),
               dropdownColor: AppTheme.surface,
               decoration: _inputDecoration(
                 label: 'Payment Mode',
@@ -258,7 +258,7 @@ class _AddTransactionScreenState
             // Description
             TextFormField(
               controller: _descCtrl,
-              style: TextStyle(color: AppTheme.textPrimary),
+              style: const TextStyle(color: AppTheme.textPrimary),
               maxLines: 2,
               decoration: _inputDecoration(
                 label: 'Description (optional)',
@@ -271,7 +271,7 @@ class _AddTransactionScreenState
             // Reference
             TextFormField(
               controller: _refCtrl,
-              style: TextStyle(color: AppTheme.textPrimary),
+              style: const TextStyle(color: AppTheme.textPrimary),
               decoration: _inputDecoration(
                 label: 'Reference No. (optional)',
                 hint: 'UPI/Cheque/TXN ID',
@@ -327,25 +327,25 @@ class _AddTransactionScreenState
           ? Icon(icon, color: AppTheme.textSecondary, size: 20)
           : null,
       prefix: prefix,
-      labelStyle: TextStyle(color: AppTheme.textSecondary),
-      hintStyle: TextStyle(color: AppTheme.textSecondary),
+      labelStyle: const TextStyle(color: AppTheme.textSecondary),
+      hintStyle: const TextStyle(color: AppTheme.textSecondary),
       filled: true,
       fillColor: AppTheme.surface,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppTheme.divider),
+        borderSide: const BorderSide(color: AppTheme.divider),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppTheme.primary, width: 2),
+        borderSide: const BorderSide(color: AppTheme.primary, width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppTheme.debit),
+        borderSide: const BorderSide(color: AppTheme.debit),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: AppTheme.debit, width: 2),
+        borderSide: const BorderSide(color: AppTheme.debit, width: 2),
       ),
     );
   }

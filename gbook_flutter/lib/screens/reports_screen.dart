@@ -62,7 +62,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text('Reports',
+        title: const Text('Reports',
             style: TextStyle(
                 color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
         elevation: 0,
@@ -83,7 +83,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Select Period',
+                  const Text('Select Period',
                       style: TextStyle(
                           color: AppTheme.textSecondary,
                           fontSize: 13,
@@ -167,7 +167,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ],
 
             const SizedBox(height: 20),
-            Text('Overall Summary',
+            const Text('Overall Summary',
                 style: TextStyle(
                     color: AppTheme.textPrimary,
                     fontSize: 16,
@@ -179,7 +179,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
 
             const SizedBox(height: 20),
-            Text('Recent Transactions',
+            const Text('Recent Transactions',
                 style: TextStyle(
                     color: AppTheme.textPrimary,
                     fontSize: 16,
@@ -231,7 +231,7 @@ class _SummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(label,
-              style: TextStyle(
+              style: const TextStyle(
                   color: AppTheme.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w500)),
@@ -272,7 +272,7 @@ class _NetBalanceCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Net Balance',
+              const Text('Net Balance',
                   style: TextStyle(
                       color: AppTheme.textSecondary,
                       fontSize: 13,
@@ -285,7 +285,7 @@ class _NetBalanceCard extends StatelessWidget {
                     fontWeight: FontWeight.w700),
               ),
               Text(isPositive ? 'Net to receive' : 'Net to pay',
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
             ],
           ),
@@ -293,11 +293,11 @@ class _NetBalanceCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text('$transactionCount',
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w700)),
-              Text('transactions',
+              const Text('transactions',
                   style: TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12)),
             ],
@@ -360,7 +360,7 @@ class _Stat extends StatelessWidget {
       children: [
         Text(label,
             style:
-                TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
         Text(value,
             style: TextStyle(
@@ -411,14 +411,14 @@ class _TxRow extends StatelessWidget {
               children: [
                 Text(
                   tx.description ?? (isCredit ? 'Credit' : 'Debit'),
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontWeight: FontWeight.w500,
                       fontSize: 14),
                 ),
                 Text(
                   AppHelpers.formatDate(tx.date),
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: AppTheme.textSecondary, fontSize: 12),
                 ),
               ],

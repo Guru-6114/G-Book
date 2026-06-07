@@ -1,5 +1,4 @@
 // lib/screens/auth_screens.dart
-// PASTE TO: gbook_flutter/lib/screens/auth_screens.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../providers/providers.dart';
@@ -80,7 +79,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(
+                  const Text(
                     'GBook',
                     style: TextStyle(
                       color: AppTheme.primaryColor,
@@ -212,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 border: OutlineInputBorder(
                                   borderRadius:
                                       BorderRadius.circular(6),
-                                  borderSide: BorderSide(
+                                  borderSide: const BorderSide(
                                       color: AppTheme.primaryColor,
                                       width: 2),
                                 ),
@@ -225,7 +224,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius:
                                       BorderRadius.circular(6),
-                                  borderSide: BorderSide(
+                                  borderSide: const BorderSide(
                                       color: AppTheme.primaryColor,
                                       width: 2),
                                 ),
@@ -381,8 +380,12 @@ class _OtpScreenState extends State<OtpScreen> {
 
   @override
   void dispose() {
-    for (final c in _ctls) c.dispose();
-    for (final n in _nodes) n.dispose();
+    for (final c in _ctls) {
+      c.dispose();
+    }
+    for (final n in _nodes) {
+      n.dispose();
+    }
     super.dispose();
   }
 
@@ -437,7 +440,7 @@ class _OtpScreenState extends State<OtpScreen> {
                       contentPadding: EdgeInsets.zero,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
+                        borderSide: const BorderSide(
                             color: AppTheme.primaryColor, width: 1.5),
                       ),
                       enabledBorder: OutlineInputBorder(
@@ -447,7 +450,7 @@ class _OtpScreenState extends State<OtpScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(
+                        borderSide: const BorderSide(
                             color: AppTheme.primaryColor, width: 2),
                       ),
                     ),
@@ -491,7 +494,7 @@ class _OtpScreenState extends State<OtpScreen> {
                           .read<AuthProvider>()
                           .sendOtp(widget.phone);
                     },
-                    child: Text(
+                    child: const Text(
                       'RESEND',
                       style: TextStyle(
                         fontSize: 13,
@@ -551,7 +554,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _emailCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
 
-  // FIX: use a state variable instead of value= on DropdownButtonFormField
   String _category = 'Retail';
   bool _saving = false;
 
@@ -674,12 +676,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            // FIX: Use DropdownButtonFormField with NO value= prop;
-            // use initialValue via the state variable _category
             DropdownButtonFormField<String>(
-              // FIX: removed deprecated value= and replaced with
-              // managing selection purely via onChanged + _category state
-              value: _category,
+              initialValue: _category,
               decoration: const InputDecoration(
                 labelText: 'Business Category',
                 prefixIcon: Icon(Icons.category_outlined),

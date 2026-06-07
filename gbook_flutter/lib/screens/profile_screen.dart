@@ -70,7 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: AppTheme.background,
       appBar: AppBar(
         backgroundColor: AppTheme.surface,
-        title: Text('Profile',
+        title: const Text('Profile',
             style: TextStyle(
                 color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
         actions: [
@@ -84,7 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
             child: Text(
               _isEditing ? 'Save' : 'Edit',
-              style: TextStyle(color: AppTheme.primary),
+              style: const TextStyle(color: AppTheme.primary),
             ),
           ),
         ],
@@ -115,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Center(
             child: Text(
               user?.name ?? '',
-              style: TextStyle(
+              style: const TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 20,
                   fontWeight: FontWeight.w700),
@@ -124,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Center(
             child: Text(
               user?.phone ?? '',
-              style: TextStyle(color: AppTheme.textSecondary),
+              style: const TextStyle(color: AppTheme.textSecondary),
             ),
           ),
           const SizedBox(height: 28),
@@ -191,17 +191,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.pop(context);
                         auth.logout();
                       },
-                      child: Text('Logout',
+                      child: const Text('Logout',
                           style: TextStyle(color: AppTheme.debit)),
                     ),
                   ],
                 ),
               );
             },
-            icon: Icon(Icons.logout, color: AppTheme.debit),
-            label: Text('Logout', style: TextStyle(color: AppTheme.debit)),
+            icon: const Icon(Icons.logout, color: AppTheme.debit),
+            label: const Text('Logout', style: TextStyle(color: AppTheme.debit)),
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: AppTheme.debit),
+              side: const BorderSide(color: AppTheme.debit),
               minimumSize: const Size(double.infinity, 48),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -233,7 +233,7 @@ class _SectionCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Text(title,
-                style: TextStyle(
+                style: const TextStyle(
                     color: AppTheme.primary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13)),
@@ -270,22 +270,22 @@ class _ProfileField extends StatelessWidget {
           ? TextFormField(
               controller: controller,
               keyboardType: keyboardType,
-              style: TextStyle(color: AppTheme.textPrimary),
+              style: const TextStyle(color: AppTheme.textPrimary),
               decoration: InputDecoration(
                 labelText: label,
                 prefixIcon: Icon(icon, color: AppTheme.textSecondary, size: 20),
-                labelStyle: TextStyle(color: AppTheme.textSecondary),
+                labelStyle: const TextStyle(color: AppTheme.textSecondary),
                 filled: true,
                 fillColor: AppTheme.background,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: AppTheme.divider)),
+                    borderSide: const BorderSide(color: AppTheme.divider)),
                 enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: AppTheme.divider)),
+                    borderSide: const BorderSide(color: AppTheme.divider)),
                 focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: AppTheme.primary, width: 2)),
+                    borderSide: const BorderSide(color: AppTheme.primary, width: 2)),
               ),
             )
           : Row(
@@ -297,10 +297,10 @@ class _ProfileField extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(label,
-                          style: TextStyle(
+                          style: const TextStyle(
                               color: AppTheme.textSecondary, fontSize: 12)),
                       Text(value,
-                          style: TextStyle(
+                          style: const TextStyle(
                               color: AppTheme.textPrimary,
                               fontWeight: FontWeight.w500)),
                     ],

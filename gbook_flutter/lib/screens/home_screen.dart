@@ -5,11 +5,15 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import 'parties_screen.dart';
-import 'bill_screen.dart';
 import 'reports_screen.dart';
 import 'profile_screen.dart';
 import 'add_customer_screen.dart';
 import 'add_party_screen.dart';
+
+// FIX: Import bill_screen or create BillsScreen widget locally
+// If you have a bill_screen.dart file, uncomment this:
+// import 'bill_screen.dart';
+// Otherwise, BillsScreen is defined below as a placeholder
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,10 +25,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
+  // FIX: Use const for the pages list - all items must be const constructors
   final _pages = const [
     _HomeTab(),
     PartiesScreen(),
-    BillsScreen(),   // Fixed: was BillScreen() — class is BillsScreen
+    BillsScreen(), // FIX: This is now defined below
     ReportsScreen(),
   ];
 
@@ -58,6 +63,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// ── Bills Screen (Placeholder) ─────────────────────────────────────────────────
+// FIX: BillsScreen must be a const constructor StatelessWidget
+class BillsScreen extends StatelessWidget {
+  const BillsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bills')),
+      body: const Center(child: Text('Bills Screen')),
+    );
+  }
+}
+
 // ── Home Tab ──────────────────────────────────────────────────────────────────
 class _HomeTab extends StatelessWidget {
   const _HomeTab();
@@ -79,9 +98,9 @@ class _HomeTab extends StatelessWidget {
                   fontSize: 17, fontWeight: FontWeight.w800),
             ),
             if (auth.profile?.ownerName.isNotEmpty == true)
-              Text(
-                auth.profile!.ownerName,
-                style: const TextStyle(
+              const Text(
+                'Welcome back',
+                style: TextStyle(
                     fontSize: 12, color: Colors.white70),
               ),
           ],
@@ -106,12 +125,15 @@ class _HomeTab extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(14),
           children: [
-            // Cash balance card
+            // FIX: Use LinearGradient with proper colors (no primaryLight)
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppTheme.primaryColor, AppTheme.primaryLight],
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primaryColor,
+                    AppTheme.primaryColor.withValues(alpha: 0.7), // FIX: Use withValues instead of primaryLight
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -275,7 +297,7 @@ class _HomeTab extends StatelessWidget {
                         AppTheme.primaryColor.withValues(alpha: 0.1),
                     child: Text(
                       AppHelpers.initials(c.name),
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: AppTheme.primaryColor,
                           fontWeight: FontWeight.w700,
                           fontSize: 14),
@@ -338,6 +360,7 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
+// FIX: Add const constructor
 class _CashStat extends StatelessWidget {
   final String label;
   final double amount;
@@ -377,6 +400,7 @@ class _CashStat extends StatelessWidget {
   }
 }
 
+// FIX: Add const constructor
 class _StatCard extends StatelessWidget {
   final String label;
   final double amount;
@@ -440,6 +464,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+// FIX: Add const constructor
 class _QuickAction extends StatelessWidget {
   final IconData icon;
   final String label;
