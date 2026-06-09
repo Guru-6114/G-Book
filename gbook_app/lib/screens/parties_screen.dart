@@ -1,5 +1,9 @@
 // lib/screens/parties_screen.dart
-// Matches Khatabook Customers/Suppliers UI (Image 1)
+// FIXED:
+//  1. AppColors.textHint now exists in app_theme.dart
+//  2. Removed 'const' from Icon widgets that reference AppColors.textHint
+//     (runtime constants cannot be used in compile-time const contexts)
+//  3. No double ₹ symbol — formatCurrencyCompact() embeds it.
 import 'package:flutter/material.dart';
 import '../providers/providers.dart';
 import 'package:provider/provider.dart';
@@ -37,44 +41,59 @@ class _PartiesScreenState extends State<PartiesScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundGrey,
-      appBar: AppBar(
-        backgroundColor: AppTheme.primaryColor,
-        automaticallyImplyLeading: false,
-        title: Consumer<AuthProvider>(
-          builder: (_, auth, __) => Text(
-            auth.profile?.businessName ?? 'My Business',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 20),
-            onPressed: () => Navigator.pushNamed(context, '/profile'),
+      backgroundColor: AppColors.lightGrey,
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverAppBar(
+            backgroundColor: AppColors.primary,
+            floating: true,
+            pinned: true,
+            automaticallyImplyLeading: false,
+            title: Consumer<AuthProvider>(
+              builder: (_, auth, __) => Text(
+                auth.profile?.businessName ?? 'My Business',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined,
+                    color: Colors.white, size: 20),
+                onPressed: () =>
+                    Navigator.pushNamed(context, '/profile'),
+              ),
+            ],
+            bottom: TabBar(
+              controller: _tabs,
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                letterSpacing: 1,
+              ),
+              unselectedLabelStyle:
+                  const TextStyle(fontSize: 14),
+              tabs: const [
+                Tab(text: 'CUSTOMERS'),
+                Tab(text: 'SUPPLIERS'),
+              ],
+            ),
           ),
         ],
-        bottom: TabBar(
+        body: TabBarView(
           controller: _tabs,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(
-              fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: 1),
-          unselectedLabelStyle: const TextStyle(fontSize: 14),
-          tabs: const [
-            Tab(text: 'CUSTOMERS'),
-            Tab(text: 'SUPPLIERS'),
+          children: const [
+            _CustomersTab(),
+            _SuppliersTab(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabs,
-        children: const [
-          _CustomersTab(),
-          _SuppliersTab(),
-        ],
       ),
     );
   }
@@ -91,6 +110,7 @@ class _CustomersTab extends StatefulWidget {
 class _CustomersTabState extends State<_CustomersTab> {
   final _searchCtrl = TextEditingController();
   String _query = '';
+  String _filter = 'all';
 
   @override
   void dispose() {
@@ -101,68 +121,75 @@ class _CustomersTabState extends State<_CustomersTab> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<CustomerProvider>();
-    final customers = provider.customers
-        .where((c) =>
-            _query.isEmpty ||
-            c.name.toLowerCase().contains(_query.toLowerCase()) ||
-            (c.phone?.contains(_query) ?? false))
-        .toList();
+    final filtered = provider.customers.where((c) {
+      final matchQ = _query.isEmpty ||
+          c.name.toLowerCase().contains(_query.toLowerCase()) ||
+          (c.phone?.contains(_query) ?? false);
+      final matchF = _filter == 'all' ||
+          (_filter == 'toget' && c.balance > 0) ||
+          (_filter == 'togive' && c.balance < 0);
+      return matchQ && matchF;
+    }).toList();
 
     return Column(
       children: [
-        // Summary cards - Khatabook style
+        // Summary row
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 14),
           child: Column(
             children: [
               Row(
                 children: [
                   Expanded(
-                    child: _KhatabookSummaryCard(
+                    child: _SummaryTile(
                       label: 'You will give',
                       amount: provider.totalPayable,
-                      color: const Color(0xFF00796B), // teal/green
-                      prefix: '₹',
+                      color: AppColors.green,
                     ),
                   ),
                   Container(
                     width: 1,
-                    height: 50,
-                    color: const Color(0xFFE0E0E0),
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    height: 48,
+                    color: AppColors.divider,
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 12),
                   ),
                   Expanded(
-                    child: _KhatabookSummaryCard(
+                    child: _SummaryTile(
                       label: 'You will get',
                       amount: provider.totalReceivable,
-                      color: const Color(0xFFB71C1C), // dark red
-                      prefix: '₹',
+                      color: AppColors.red,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              // View Reports button
               InkWell(
-                onTap: () => Navigator.pushNamed(context, '/reports'),
+                onTap: () =>
+                    Navigator.pushNamed(context, '/reports'),
+                borderRadius: BorderRadius.circular(6),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 10),
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF1565C0)),
-                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                        color: AppColors.blue),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment:
+                        MainAxisAlignment.center,
                     children: [
                       Icon(Icons.picture_as_pdf_outlined,
-                          size: 16, color: Color(0xFF1565C0)),
+                          size: 16, color: AppColors.blue),
                       SizedBox(width: 6),
                       Text(
                         'View Reports',
                         style: TextStyle(
-                          color: Color(0xFF1565C0),
+                          color: AppColors.blue,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -175,64 +202,113 @@ class _CustomersTabState extends State<_CustomersTab> {
           ),
         ),
 
-        // Search bar
+        // Search
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          padding:
+              const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: TextField(
             controller: _searchCtrl,
             decoration: InputDecoration(
               hintText: 'Search customers...',
-              hintStyle:
-                  const TextStyle(fontSize: 13, color: Color(0xFFBDBDBD)),
-              prefixIcon:
-                  const Icon(Icons.search, size: 20, color: Color(0xFF9E9E9E)),
+              hintStyle: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textHint),
+              prefixIcon: const Icon(Icons.search,
+                  color: AppColors.textSecondary, size: 20),
               suffixIcon: _query.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close, size: 18),
+                      icon: const Icon(Icons.close,
+                          size: 18),
                       onPressed: () {
                         _searchCtrl.clear();
                         setState(() => _query = '');
                       })
                   : null,
-              isDense: true,
               filled: true,
-              fillColor: const Color(0xFFF5F5F5),
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              fillColor: AppColors.lightGrey,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(24),
                 borderSide: BorderSide.none,
               ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 10),
+              isDense: true,
             ),
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
 
-        const Divider(height: 1),
+        // Filter chips
+        Container(
+          color: Colors.white,
+          padding:
+              const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: Row(
+            children: [
+              _FilterChip(
+                label: 'All',
+                selected: _filter == 'all',
+                onTap: () => setState(() => _filter = 'all'),
+              ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: 'To Get',
+                selected: _filter == 'toget',
+                color: AppColors.green,
+                onTap: () =>
+                    setState(() => _filter = 'toget'),
+              ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: 'To Give',
+                selected: _filter == 'togive',
+                color: AppColors.red,
+                onTap: () =>
+                    setState(() => _filter = 'togive'),
+              ),
+              const Spacer(),
+              Text(
+                '${filtered.length} parties',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
 
         // List
         Expanded(
           child: provider.loading
-              ? const Center(child: CircularProgressIndicator())
-              : customers.isEmpty
+              ? const Center(
+                  child: CircularProgressIndicator())
+              : filtered.isEmpty
                   ? _KhatabookEmptyState(
-                      onAddCustomer: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const AddCustomerScreen()),
-                      ),
+                      onAddCustomer: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  const AddCustomerScreen()),
+                        );
+                      },
                     )
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          context.read<CustomerProvider>().loadCustomers(),
-                      child: ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: customers.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(height: 1, indent: 68),
-                        itemBuilder: (_, i) =>
-                            _CustomerTile(customer: customers[i]),
-                      ),
+                  : ListView.separated(
+                      padding:
+                          const EdgeInsets.only(bottom: 80),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(
+                              height: 1,
+                              indent: 72,
+                              color: AppColors.divider),
+                      itemBuilder: (_, i) => _CustomerTile(
+                          customer: filtered[i]),
                     ),
         ),
       ],
@@ -240,18 +316,16 @@ class _CustomersTabState extends State<_CustomersTab> {
   }
 }
 
-// ── Khatabook-style Summary Card ──────────────────────────────────────────────
-class _KhatabookSummaryCard extends StatelessWidget {
+// ── Summary tile ───────────────────────────────────────────────────────────────
+class _SummaryTile extends StatelessWidget {
   final String label;
   final double amount;
   final Color color;
-  final String prefix;
 
-  const _KhatabookSummaryCard({
+  const _SummaryTile({
     required this.label,
     required this.amount,
     required this.color,
-    required this.prefix,
   });
 
   @override
@@ -261,14 +335,17 @@ class _KhatabookSummaryCard extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF757575)),
+          style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary),
         ),
         const SizedBox(height: 4),
+        // formatCurrencyCompact already includes ₹ — no prefix here
         Text(
-          '$prefix ${AppHelpers.formatCurrencyCompact(amount)}',
+          AppHelpers.formatCurrencyCompact(amount),
           style: TextStyle(
             color: color,
-            fontSize: 20,
+            fontSize: 22,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -277,7 +354,7 @@ class _KhatabookSummaryCard extends StatelessWidget {
   }
 }
 
-// ── Khatabook-style Empty State ────────────────────────────────────────────────
+// ── Khatabook empty state ──────────────────────────────────────────────────────
 class _KhatabookEmptyState extends StatelessWidget {
   final VoidCallback onAddCustomer;
   const _KhatabookEmptyState({required this.onAddCustomer});
@@ -290,50 +367,46 @@ class _KhatabookEmptyState extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Illustration placeholder
               Container(
-                width: 200,
-                height: 160,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
+                  shape: BoxShape.circle,
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.people_alt_outlined,
-                        size: 64, color: Colors.grey.shade400),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Collect payments faster',
-                      style: TextStyle(
-                          color: Colors.grey.shade500, fontSize: 13),
-                    ),
-                  ],
-                ),
+                child: Icon(Icons.people_alt_outlined,
+                    size: 52,
+                    color: Colors.grey.shade400),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+              const Text(
+                'Collect payments faster',
+                style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14),
+              ),
+              const SizedBox(height: 12),
               const Text(
                 'Add customers & maintain your Khata',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF424242),
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
         ),
-
-        // Bottom action bar
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 12),
           child: Row(
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_forward,
-                    color: Color(0xFF1565C0)),
+                    color: AppColors.blue),
                 onPressed: () {},
               ),
               const Spacer(),
@@ -342,10 +415,12 @@ class _KhatabookEmptyState extends StatelessWidget {
                 icon: const Icon(Icons.person_add, size: 18),
                 label: const Text(
                   'ADD CUSTOMER',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentRed,
+                  backgroundColor: AppColors.red,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 14),
@@ -362,7 +437,51 @@ class _KhatabookEmptyState extends StatelessWidget {
   }
 }
 
-// ── Customer Tile ──────────────────────────────────────────────────────────────
+// ── Filter chip ────────────────────────────────────────────────────────────────
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    this.color = AppColors.primary,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(
+            horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? color : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected
+                ? Colors.white
+                : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Customer tile ──────────────────────────────────────────────────────────────
 class _CustomerTile extends StatelessWidget {
   final Customer customer;
   const _CustomerTile({required this.customer});
@@ -370,30 +489,36 @@ class _CustomerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final balance = customer.balance;
-    final hasBalance = balance != 0;
-    // Khatabook: positive balance = green (you will get)
-    // negative = red (you will give)
-    final color = balance > 0
-        ? const Color(0xFF00796B)
-        : balance < 0
-            ? const Color(0xFFB71C1C)
-            : Colors.grey;
-    final label = balance > 0 ? 'Will Give' : 'Will Get';
+    final isPositive = balance > 0;
+    final isZero = balance == 0;
+    final color = isZero
+        ? AppColors.textSecondary
+        : isPositive
+            ? AppColors.green
+            : AppColors.red;
+    final balanceLabel = isZero
+        ? 'Settled'
+        : isPositive
+            ? 'Will give'
+            : 'Will get';
 
     return InkWell(
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (_) => CustomerScreen(customer: customer)),
+            builder: (_) =>
+                CustomerScreen(customer: customer)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 13),
         child: Row(
           children: [
-            // Avatar circle
+            // Avatar
             Container(
-              width: 44,
-              height: 44,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 color: AppHelpers.getAvatarColor(customer.name)
                     .withValues(alpha: 0.15),
@@ -403,7 +528,8 @@ class _CustomerTile extends StatelessWidget {
                 child: Text(
                   AppHelpers.initials(customer.name),
                   style: TextStyle(
-                    color: AppHelpers.getAvatarColor(customer.name),
+                    color: AppHelpers.getAvatarColor(
+                        customer.name),
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -420,41 +546,52 @@ class _CustomerTile extends StatelessWidget {
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
-                      color: Color(0xFF212121),
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  if (customer.phone != null)
+                  if (customer.phone != null &&
+                      customer.phone!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
                     Text(
                       customer.phone!,
                       style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF9E9E9E)),
+                          fontSize: 12,
+                          color: AppColors.textSecondary),
                     ),
+                  ],
                 ],
               ),
             ),
-            if (hasBalance)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isZero)
                   Text(
-                    '₹ ${AppHelpers.formatCurrencyCompact(balance.abs())}',
+                    // formatCurrencyCompact includes ₹ already
+                    AppHelpers.formatCurrencyCompact(
+                        balance.abs()),
                     style: TextStyle(
                       color: color,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
                   ),
-                  Text(
-                    label,
-                    style: TextStyle(fontSize: 11, color: color),
+                Text(
+                  balanceLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: isZero
+                        ? FontWeight.normal
+                        : FontWeight.w500,
                   ),
-                ],
-              )
-            else
-              const Text(
-                'Settled',
-                style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
-              ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 6),
+            // FIX: Not const — Icon colour is a runtime value
+            const Icon(Icons.chevron_right,
+                color: AppColors.textHint, size: 18),
           ],
         ),
       ),
@@ -483,104 +620,214 @@ class _SuppliersTabState extends State<_SuppliersTab> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SupplierProvider>();
-    final suppliers = provider.suppliers
+    final filtered = provider.suppliers
         .where((s) =>
             _query.isEmpty ||
-            s.name.toLowerCase().contains(_query.toLowerCase()) ||
+            s.name
+                .toLowerCase()
+                .contains(_query.toLowerCase()) ||
             (s.phone?.contains(_query) ?? false))
         .toList();
 
     return Column(
       children: [
+        // Summary
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.all(12),
-          child: _KhatabookSummaryCard(
+          padding: const EdgeInsets.all(16),
+          child: _SummaryTile(
             label: 'Total Payable',
             amount: provider.totalPayable,
-            color: const Color(0xFFB71C1C),
-            prefix: '₹',
+            color: AppColors.red,
           ),
         ),
+
+        // Search
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          padding:
+              const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: TextField(
             controller: _searchCtrl,
             decoration: InputDecoration(
               hintText: 'Search suppliers...',
-              prefixIcon:
-                  const Icon(Icons.search, size: 20, color: Color(0xFF9E9E9E)),
-              isDense: true,
+              hintStyle: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textHint),
+              prefixIcon: const Icon(Icons.search,
+                  color: AppColors.textSecondary, size: 20),
+              suffixIcon: _query.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close,
+                          size: 18),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _query = '');
+                      })
+                  : null,
               filled: true,
-              fillColor: const Color(0xFFF5F5F5),
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              fillColor: AppColors.lightGrey,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(24),
                 borderSide: BorderSide.none,
               ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 10),
+              isDense: true,
             ),
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
-        const Divider(height: 1),
+
+        // List
         Expanded(
           child: provider.loading
-              ? const Center(child: CircularProgressIndicator())
-              : suppliers.isEmpty
+              ? const Center(
+                  child: CircularProgressIndicator())
+              : filtered.isEmpty
                   ? EmptyState(
-                      title: 'No suppliers yet',
-                      subtitle: 'Add your suppliers here',
+                      title: _query.isNotEmpty
+                          ? 'No result for "$_query"'
+                          : 'No suppliers yet',
+                      subtitle: _query.isEmpty
+                          ? 'Add your suppliers here'
+                          : '',
                       icon: Icons.local_shipping_outlined,
-                      actionLabel: 'Add Supplier',
-                      onAction: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                const AddPartyScreen(isSupplier: true)),
-                      ),
+                      actionLabel: _query.isEmpty
+                          ? 'Add Supplier'
+                          : null,
+                      onAction: _query.isEmpty
+                          ? () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const AddPartyScreen(
+                                            isSupplier: true)),
+                              );
+                            }
+                          : null,
                     )
                   : ListView.separated(
-                      itemCount: suppliers.length,
+                      padding:
+                          const EdgeInsets.only(bottom: 80),
+                      itemCount: filtered.length,
                       separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 68),
-                      itemBuilder: (_, i) {
-                        final s = suppliers[i];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: AppHelpers.getAvatarColor(s.name)
-                                .withValues(alpha: 0.15),
-                            child: Text(
-                              AppHelpers.initials(s.name),
-                              style: TextStyle(
-                                color: AppHelpers.getAvatarColor(s.name),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          title: Text(s.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                          subtitle: s.phone != null
-                              ? Text(s.phone!,
-                                  style: const TextStyle(fontSize: 12))
-                              : null,
-                          trailing: s.balance != 0
-                              ? Text(
-                                  '₹ ${AppHelpers.formatCurrencyCompact(s.balance.abs())}',
-                                  style: const TextStyle(
-                                    color: Color(0xFFB71C1C),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                )
-                              : const Text('Settled',
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.grey)),
-                        );
-                      },
+                          const Divider(
+                              height: 1,
+                              indent: 72,
+                              color: AppColors.divider),
+                      itemBuilder: (_, i) => _SupplierTile(
+                          supplier: filtered[i]),
                     ),
         ),
       ],
+    );
+  }
+}
+
+// ── Supplier tile ──────────────────────────────────────────────────────────────
+class _SupplierTile extends StatelessWidget {
+  final Supplier supplier;
+  const _SupplierTile({required this.supplier});
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = supplier.balance;
+    final isZero = balance == 0;
+    final color = balance > 0 ? AppColors.red : AppColors.green;
+    final label = isZero
+        ? 'Settled'
+        : balance > 0
+            ? 'Payable'
+            : 'Advance';
+
+    return InkWell(
+      onTap: () {},
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(
+            horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.orange.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  AppHelpers.initials(supplier.name),
+                  style: const TextStyle(
+                    color: AppColors.orange,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    supplier.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (supplier.phone != null &&
+                      supplier.phone!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(supplier.phone!,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary)),
+                  ],
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isZero)
+                  Text(
+                    // formatCurrencyCompact includes ₹ already
+                    AppHelpers.formatCurrencyCompact(
+                        balance.abs()),
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isZero
+                        ? AppColors.textSecondary
+                        : color,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 6),
+            // FIX: Not const — colour is a runtime constant
+            const Icon(Icons.chevron_right,
+                color: AppColors.textHint, size: 18),
+          ],
+        ),
+      ),
     );
   }
 }

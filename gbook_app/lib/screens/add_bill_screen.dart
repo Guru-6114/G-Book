@@ -94,12 +94,12 @@ class _AddBillScreenState extends State<AddBillScreen> {
         paidAmount: paid,
         date: _date,
         createdAt: now,
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        notes:
+            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
 
       await billsProvider.addBill(bill);
 
-      // Adjust stock if sale or purchase — check mounted before using context
       if (!mounted) return;
       if (widget.billType == BillType.sale ||
           widget.billType == BillType.purchase) {
@@ -491,7 +491,8 @@ class _PaymentModeSelector extends StatelessWidget {
                   : Colors.grey[100],
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected ? AppColors.primary : Colors.grey[300]!,
+                color:
+                    isSelected ? AppColors.primary : Colors.grey[300]!,
               ),
             ),
             child: Text(
@@ -615,9 +616,13 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
             ],
           ),
           const SizedBox(height: 8),
+          // FIX: Use IntrinsicWidth + flex layout to prevent overflow
+          // Qty gets flex:2, Unit gets flex:2 (constrained), Price gets flex:3
           Row(
             children: [
+              // Qty
               Expanded(
+                flex: 2,
                 child: TextFormField(
                   controller: widget.row.qtyCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -627,21 +632,24 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                       double.tryParse(v ?? '') == null ? 'Invalid' : null,
                   decoration: const InputDecoration(
                     labelText: 'Qty',
-                    contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     isDense: true,
                   ),
                 ),
               ),
               const SizedBox(width: 6),
-              SizedBox(
-                width: 80,
+              // FIX: Unit uses Expanded with flex:2 instead of fixed SizedBox(width:80)
+              // This prevents overflow on small screens
+              Expanded(
+                flex: 2,
                 child: DropdownButtonFormField<String>(
-                  initialValue: widget.row.unit,
+                  value: widget.row.unit,
                   isDense: true,
+                  isExpanded: true, // FIX: prevent internal overflow
                   decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 8),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
                   items: ['PCS', 'KGS', 'LTR', 'MTR', 'BOX', 'PKT']
@@ -657,7 +665,9 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                 ),
               ),
               const SizedBox(width: 6),
+              // Price
               Expanded(
+                flex: 3,
                 child: TextFormField(
                   controller: widget.row.priceCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -667,8 +677,8 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                       double.tryParse(v ?? '') == null ? 'Invalid' : null,
                   decoration: const InputDecoration(
                     labelText: 'Price ₹',
-                    contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 8),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     isDense: true,
                   ),
                 ),

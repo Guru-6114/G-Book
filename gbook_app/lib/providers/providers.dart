@@ -54,6 +54,7 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      // ignore: prefer_const_declarations
       final url = '${AppConstants.baseUrl}/auth/send-otp/';
       debugPrint('📱 sendOtp → URL: $url');
       debugPrint('📱 sendOtp → phone: $phone');
@@ -91,6 +92,7 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      // ignore: prefer_const_declarations
       final url = '${AppConstants.baseUrl}/auth/verify-otp/';
       debugPrint('📱 verifyOtp → URL: $url');
       debugPrint('📱 verifyOtp → phone: $phone, otp: $otp');

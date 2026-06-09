@@ -23,6 +23,8 @@ class AppColors {
   static const Color divider   = Color(0xFFE5E7EB);
   // alias used by language_screen
   static const Color border    = Color(0xFFE5E7EB);
+  // alias used by parties_screen search hint
+  static const Color textHint  = Color(0xFFBDBDBD);
 
   static const Color background   = Color(0xFFF9FAFB);
   static const Color surface      = Colors.white;
