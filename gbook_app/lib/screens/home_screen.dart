@@ -9,9 +9,11 @@ import 'reports_screen.dart';
 import 'profile_screen.dart';
 import 'add_customer_screen.dart';
 import 'add_party_screen.dart';
-import 'add_bill_screen.dart'; // AddBillScreen lives here
+import 'add_bill_screen.dart';
 import '../models/models.dart';
-import 'cashbook_screen.dart'; // make sure this exists or use a placeholder
+import 'cashbook_screen.dart';
+import 'items_screen.dart';
+import 'more_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,32 +25,31 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
-  // We can't use const here because _BillsScreen needs a callback for tab switching
-  late final List<Widget> _pages;
-
-  @override
-  void initState() {
-    super.initState();
-    _pages = [
-      const _HomeTab(),
-      const PartiesScreen(),
-      _BillsScreen(onGoToReports: () => setState(() => _tab = 3)),
-      const ReportsScreen(),
-    ];
+  void _switchTab(int index) {
+    setState(() => _tab = index);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Build pages lazily so MoreScreen has access to _switchTab
+    final pages = [
+      const PartiesScreen(),
+      _BillsScreen(onGoToReports: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ReportsScreen()),
+        );
+      }),
+      const ItemsScreen(),
+      MoreScreen(onNavigateToTab: _switchTab),
+    ];
+
     return Scaffold(
-      body: IndexedStack(index: _tab, children: _pages),
+      body: IndexedStack(index: _tab, children: pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tab,
         onTap: (i) => setState(() => _tab = i),
         items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home'),
           BottomNavigationBarItem(
               icon: Icon(Icons.people_outline),
               activeIcon: Icon(Icons.people),
@@ -58,9 +59,13 @@ class _HomeScreenState extends State<HomeScreen> {
               activeIcon: Icon(Icons.receipt_long),
               label: 'Bills'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_outlined),
-              activeIcon: Icon(Icons.bar_chart),
-              label: 'Reports'),
+              icon: Icon(Icons.inventory_2_outlined),
+              activeIcon: Icon(Icons.inventory_2),
+              label: 'Items'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.more_horiz_outlined),
+              activeIcon: Icon(Icons.more_horiz),
+              label: 'More'),
         ],
       ),
     );
@@ -198,7 +203,6 @@ class _BillsScreenState extends State<_BillsScreen>
       backgroundColor: AppTheme.backgroundGrey,
       body: Column(
         children: [
-          // ── Header ──────────────────────────────────────────────────────
           _BillsHeader(
             businessName: auth.profile?.businessName ?? 'My Business',
             businessAddress: auth.profile?.address ?? '',
@@ -206,17 +210,13 @@ class _BillsScreenState extends State<_BillsScreen>
             monthlyPurchases: billProvider.monthlyPurchases,
             todayIn: todayIn,
             todayOut: todayOut,
-            // FIX: navigate to Reports tab via callback
             onViewReports: widget.onGoToReports,
-            // FIX: open cashbook screen
             onCashbook: _openCashbook,
             onSettings: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ProfileScreen()),
             ),
           ),
-
-          // ── Tabs ────────────────────────────────────────────────────────
           Container(
             color: AppTheme.primaryColor,
             child: TabBar(
@@ -237,8 +237,6 @@ class _BillsScreenState extends State<_BillsScreen>
               ],
             ),
           ),
-
-          // ── Search bar ──────────────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -282,10 +280,7 @@ class _BillsScreenState extends State<_BillsScreen>
               ],
             ),
           ),
-
           const Divider(height: 1),
-
-          // ── Bill list ────────────────────────────────────────────────────
           Expanded(
             child: billProvider.loading
                 ? const Center(child: CircularProgressIndicator())
@@ -309,8 +304,6 @@ class _BillsScreenState extends State<_BillsScreen>
           ),
         ],
       ),
-
-      // ── Bottom bar ──────────────────────────────────────────────────────
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
@@ -341,7 +334,8 @@ class _BillsScreenState extends State<_BillsScreen>
                           )),
                       Text('Payment & Return',
                           style: TextStyle(
-                              color: AppTheme.primaryColor, fontSize: 10)),
+                              color: AppTheme.primaryColor,
+                              fontSize: 10)),
                     ],
                   ),
                 ),
@@ -384,7 +378,7 @@ class _BillsHeader extends StatelessWidget {
   final double todayIn;
   final double todayOut;
   final VoidCallback onViewReports;
-  final VoidCallback onCashbook; // FIX: separate cashbook callback
+  final VoidCallback onCashbook;
   final VoidCallback onSettings;
 
   const _BillsHeader({
@@ -407,7 +401,6 @@ class _BillsHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Business row
           Row(
             children: [
               Container(
@@ -427,11 +420,14 @@ class _BillsHeader extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text(businessName,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15)),
+                        Flexible(
+                          child: Text(businessName,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15),
+                              overflow: TextOverflow.ellipsis),
+                        ),
                         const SizedBox(width: 4),
                         const Icon(Icons.edit,
                             color: Colors.white70, size: 13),
@@ -478,8 +474,6 @@ class _BillsHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-
-          // Monthly stats row
           Row(
             children: [
               Expanded(
@@ -498,7 +492,6 @@ class _BillsHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // FIX: tapping VIEW REPORTS now calls onViewReports which switches to Reports tab
               Expanded(
                 child: GestureDetector(
                   onTap: onViewReports,
@@ -532,8 +525,6 @@ class _BillsHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-
-          // Today IN/OUT + Cashbook row
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -561,7 +552,9 @@ class _BillsHeader extends StatelessWidget {
                   ),
                 ),
                 Container(
-                    width: 1, height: 28, color: const Color(0xFFE0E0E0)),
+                    width: 1,
+                    height: 28,
+                    color: const Color(0xFFE0E0E0)),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 14),
@@ -582,7 +575,6 @@ class _BillsHeader extends StatelessWidget {
                     ),
                   ),
                 ),
-                // FIX: tapping CASHBOOK now opens cashbook screen
                 GestureDetector(
                   onTap: onCashbook,
                   child: const Row(
@@ -638,6 +630,7 @@ class _StatBox extends StatelessWidget {
                       color: amountColor,
                       fontWeight: FontWeight.w800,
                       fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(label,
                     style: const TextStyle(
@@ -723,7 +716,8 @@ class _BillTile extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                  color: iconBg, borderRadius: BorderRadius.circular(10)),
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10)),
               child: Icon(_icon, color: iconColor, size: 22),
             ),
             const SizedBox(width: 12),
@@ -748,14 +742,16 @@ class _BillTile extends StatelessWidget {
                         ),
                         child: Text(bill.billNumber,
                             style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF616161))),
+                                fontSize: 11,
+                                color: Color(0xFF616161))),
                       ),
                       if (bill.partyName != null) ...[
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(bill.partyName!,
                               style: const TextStyle(
-                                  fontSize: 11, color: Color(0xFF9E9E9E)),
+                                  fontSize: 11,
+                                  color: Color(0xFF9E9E9E)),
                               overflow: TextOverflow.ellipsis),
                         ),
                       ],
@@ -833,7 +829,8 @@ class _EmptyBills extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
               'Tap ADD BILL below to create your first ${labels[tabIndex].toLowerCase()}',
-              style: const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
+              style:
+                  const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
               textAlign: TextAlign.center,
             ),
           ),
@@ -874,11 +871,12 @@ class _MoreOptionsSheet extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    color:
+                        AppTheme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child:
-                      Icon(o.$2, color: AppTheme.primaryColor, size: 22),
+                  child: Icon(o.$2,
+                      color: AppTheme.primaryColor, size: 22),
                 ),
                 title: Text(o.$3,
                     style: const TextStyle(
@@ -913,427 +911,6 @@ class _IconBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, size: 20, color: const Color(0xFF616161)),
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// HOME TAB
-// ══════════════════════════════════════════════════════════════════════════════
-class _HomeTab extends StatelessWidget {
-  const _HomeTab();
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final customers = context.watch<CustomerProvider>();
-    final cashbook = context.watch<CashbookProvider>();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              auth.profile?.businessName ?? 'GBook',
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.w800),
-            ),
-            if (auth.profile?.ownerName.isNotEmpty == true)
-              const Text(
-                'Welcome back',
-                style: TextStyle(fontSize: 12, color: Colors.white70),
-              ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle_outlined),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            ),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.wait([
-            context.read<CustomerProvider>().loadCustomers(),
-            context.read<CashbookProvider>().loadEntries(),
-          ]);
-        },
-        child: ListView(
-          padding: const EdgeInsets.all(14),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.primaryColor,
-                    AppTheme.primaryColor.withValues(alpha: 0.7),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Cash Balance',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Text(
-                    AppHelpers.formatCurrency(cashbook.balance),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _CashStat(
-                          label: 'Cash In',
-                          amount: cashbook.totalIn,
-                          color: const Color(0xFF90EE90),
-                          icon: Icons.arrow_downward,
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 36,
-                        color: Colors.white24,
-                        margin:
-                            const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      Expanded(
-                        child: _CashStat(
-                          label: 'Cash Out',
-                          amount: cashbook.totalOut,
-                          color: const Color(0xFFFF9999),
-                          icon: Icons.arrow_upward,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    label: 'You Will Get',
-                    amount: customers.totalReceivable,
-                    color: AppTheme.creditColor,
-                    icon: Icons.arrow_circle_down_outlined,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _StatCard(
-                    label: 'You Will Give',
-                    amount: customers.totalPayable,
-                    color: AppTheme.debitColor,
-                    icon: Icons.arrow_circle_up_outlined,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            const Text('Quick Actions',
-                style:
-                    TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _QuickAction(
-                  icon: Icons.person_add_outlined,
-                  label: 'Add\nCustomer',
-                  color: AppTheme.primaryColor,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const AddCustomerScreen()),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _QuickAction(
-                  icon: Icons.local_shipping_outlined,
-                  label: 'Add\nSupplier',
-                  color: const Color(0xFF7B68EE),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const AddPartyScreen(isSupplier: true)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _QuickAction(
-                  icon: Icons.add_shopping_cart_outlined,
-                  label: 'Add\nItem',
-                  color: const Color(0xFFFF8C00),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const AddPartyScreen(isSupplier: false)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _QuickAction(
-                  icon: Icons.receipt_outlined,
-                  label: 'New\nBill',
-                  color: const Color(0xFF20B2AA),
-                  onTap: () {},
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Recent Parties',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15)),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text('View All',
-                      style: TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            ...customers.customers.take(5).map((c) {
-              final balance = c.balance;
-              final color = balance >= 0
-                  ? AppTheme.creditColor
-                  : AppTheme.debitColor;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 6),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        AppTheme.primaryColor.withValues(alpha: 0.1),
-                    child: Text(
-                      AppHelpers.initials(c.name),
-                      style: const TextStyle(
-                          color: AppTheme.primaryColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14),
-                    ),
-                  ),
-                  title: Text(c.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
-                  subtitle: Text(c.phone ?? '',
-                      style: const TextStyle(fontSize: 12)),
-                  trailing: balance != 0
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              AppHelpers.formatCurrency(balance.abs()),
-                              style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13),
-                            ),
-                            Text(
-                              balance >= 0 ? 'Will Give' : 'Will Get',
-                              style:
-                                  TextStyle(fontSize: 10, color: color),
-                            ),
-                          ],
-                        )
-                      : const Text('Settled',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.grey)),
-                ),
-              );
-            }),
-            if (customers.customers.isEmpty)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.people_outline,
-                            size: 36, color: Colors.grey.shade400),
-                        const SizedBox(height: 8),
-                        const Text('No customers yet',
-                            style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CashStat extends StatelessWidget {
-  final String label;
-  final double amount;
-  final Color color;
-  final IconData icon;
-  const _CashStat(
-      {required this.label,
-      required this.amount,
-      required this.color,
-      required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 6),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 11)),
-            Text(AppHelpers.formatCurrency(amount),
-                style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final double amount;
-  final Color color;
-  final IconData icon;
-  const _StatCard(
-      {required this.label,
-      required this.amount,
-      required this.color,
-      required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          )
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 11, color: Colors.grey)),
-                Text(AppHelpers.formatCurrency(amount),
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: color)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _QuickAction(
-      {required this.icon,
-      required this.label,
-      required this.color,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              )
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(height: 6),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
       ),
     );
   }
