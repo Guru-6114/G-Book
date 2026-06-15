@@ -7,30 +7,24 @@ import 'screens/splash_screen.dart';
 import 'screens/customer_screen.dart';
 import 'models/models.dart';
 import 'theme/app_theme.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
+import 'services/notification_service.dart';
 
-// ── BLOCK A: No Firebase yet (use this until flutterfire configure is done) ───
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  await NotificationService().initialize();
+
   runApp(const GBookApp());
 }
-
-// ── BLOCK B: With Firebase — uncomment AFTER running:
-//   flutter pub get
-//   flutterfire configure
-// Then delete Block A above and uncomment everything below.
-//
-// import 'package:firebase_core/firebase_core.dart';
-// import 'firebase_options.dart';
-// import 'services/fcm_service.dart';
-//
-// void main() async {
-//   WidgetsFlutterBinding.ensureInitialized();
-//   await Firebase.initializeApp(
-//     options: DefaultFirebaseOptions.currentPlatform,
-//   );
-//   await FcmService().initialize();
-//   runApp(const GBookApp());
-// }
 
 class GBookApp extends StatelessWidget {
   const GBookApp({super.key});

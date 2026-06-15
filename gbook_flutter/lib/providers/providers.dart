@@ -5,20 +5,27 @@
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/local_database.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/constants.dart';
 
 // ── AuthProvider ──────────────────────────────────────────────────────────────
+// lib/providers/providers.dart
+// Replace ONLY the AuthProvider class with this:
+
 class AuthProvider extends ChangeNotifier {
   BusinessProfile? _profile;
   bool _isAuthenticated = false;
   bool _isLoading = false;
   String? _error;
+  String? _accessToken;
+  String? _refreshToken;
 
   BusinessProfile? get profile => _profile;
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
   String? get error => _error;
-
-  // Aliases used by profile_screen and parties_screen
   BusinessProfile? get user => _profile;
   BusinessProfile? get business => _profile;
 
@@ -26,10 +33,15 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final p = await LocalDatabase.instance.getBusinessProfile();
-      if (p != null) {
-        _profile = p;
-        _isAuthenticated = true;
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      if (token != null) {
+        final p = await LocalDatabase.instance.getBusinessProfile();
+        if (p != null) {
+          _profile = p;
+          _isAuthenticated = true;
+          _accessToken = token;
+        }
       }
     } catch (_) {
       _isAuthenticated = false;
@@ -42,28 +54,66 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> sendOtp(String phone) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
-    await Future.delayed(const Duration(seconds: 1));
-    _isLoading = false;
-    notifyListeners();
-    return true;
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.baseUrl}/auth/send-otp/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': phone}),
+      );
+      _isLoading = false;
+      notifyListeners();
+      if (response.statusCode == 200) return true;
+      final body = jsonDecode(response.body);
+      _error = body['error'] ?? 'Failed to send OTP';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _isLoading = false;
+      _error = 'Network error. Check your connection.';
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> verifyOtp(String phone, String otp) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
-    await Future.delayed(const Duration(milliseconds: 800));
-    _isLoading = false;
-    final valid = otp == '1234' || otp.length == 6;
-    if (valid) {
-      final existing = await LocalDatabase.instance.getBusinessProfile();
-      if (existing != null) {
-        _profile = existing;
-        _isAuthenticated = true;
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConstants.baseUrl}/auth/verify-otp/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': phone, 'otp': otp}),
+      );
+      final body = jsonDecode(response.body);
+      _isLoading = false;
+      if (response.statusCode == 200) {
+        _accessToken = body['access'];
+        _refreshToken = body['refresh'];
+        // Save token to prefs
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', _accessToken!);
+        await prefs.setString('refresh_token', _refreshToken!);
+        // Check if profile exists locally
+        final existing = await LocalDatabase.instance.getBusinessProfile();
+        if (existing != null) {
+          _profile = existing;
+          _isAuthenticated = true;
+        }
+        notifyListeners();
+        return true;
       }
+      _error = body['error'] ?? 'Invalid OTP';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _isLoading = false;
+      _error = 'Network error. Check your connection.';
+      notifyListeners();
+      return false;
     }
-    notifyListeners();
-    return valid;
   }
 
   Future<void> saveProfile(BusinessProfile p) async {
@@ -82,7 +132,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Update personal info — called by profile_screen
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     if (_profile == null) return false;
     _error = null;
@@ -101,7 +150,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Update business info — called by profile_screen
   Future<bool> updateBusiness(Map<String, dynamic> data) async {
     if (_profile == null) return false;
     _error = null;
@@ -121,8 +169,13 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('refresh_token');
     _profile = null;
     _isAuthenticated = false;
+    _accessToken = null;
+    _refreshToken = null;
     _error = null;
     notifyListeners();
   }

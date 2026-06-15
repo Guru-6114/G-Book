@@ -1,13 +1,15 @@
 // lib/providers/providers.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// All providers for GBook app — fixed to match models.dart exactly
+// All providers for GBook app
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/local_database.dart';
+import '../services/api_service.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../utils/constants.dart';
 
 // ── AuthProvider ──────────────────────────────────────────────────────────────
@@ -54,7 +56,6 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      // ignore: prefer_const_declarations
       final url = '${AppConstants.baseUrl}/auth/send-otp/';
       debugPrint('📱 sendOtp → URL: $url');
       debugPrint('📱 sendOtp → phone: $phone');
@@ -92,7 +93,6 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      // ignore: prefer_const_declarations
       final url = '${AppConstants.baseUrl}/auth/verify-otp/';
       debugPrint('📱 verifyOtp → URL: $url');
       debugPrint('📱 verifyOtp → phone: $phone, otp: $otp');
@@ -112,9 +112,24 @@ class AuthProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         _accessToken = body['access'];
         _refreshToken = body['refresh'];
+
+        // Save auth tokens
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _accessToken!);
         await prefs.setString('refresh_token', _refreshToken!);
+
+        // ── Save FCM token to backend after successful login ← NEW ──
+        try {
+          final fcmToken = await FirebaseMessaging.instance.getToken();
+          if (fcmToken != null) {
+            await ApiService().saveFcmToken(fcmToken);
+            debugPrint('✅ FCM token registered for user: $phone');
+          }
+        } catch (fcmError) {
+          debugPrint('⚠️ FCM token registration failed: $fcmError');
+          // Don't block login if FCM fails
+        }
+
         final existing = await LocalDatabase.instance.getBusinessProfile();
         if (existing != null) {
           _profile = existing;
@@ -190,6 +205,14 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Remove FCM token from backend on logout ← NEW
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await ApiService().saveFcmToken(''); // clear on backend
+      }
+    } catch (_) {}
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('auth_token');
     await prefs.remove('refresh_token');
@@ -242,11 +265,9 @@ class CustomerProvider extends ChangeNotifier {
     }
   }
 
-  Future<List<CustomerTransaction>> getTransactions(
-      String customerId) async {
+  Future<List<CustomerTransaction>> getTransactions(String customerId) async {
     try {
-      final list = await LocalDatabase.instance
-          .getCustomerTransactions(customerId);
+      final list = await LocalDatabase.instance.getCustomerTransactions(customerId);
       _txMap[customerId] = list;
       notifyListeners();
       return list;
@@ -283,15 +304,13 @@ class CustomerProvider extends ChangeNotifier {
     if (idx != -1) {
       final current = _customers[idx];
       final delta = tx.isGiven ? tx.amount : -tx.amount;
-      _customers[idx] =
-          current.copyWith(balance: current.balance + delta);
+      _customers[idx] = current.copyWith(balance: current.balance + delta);
       await LocalDatabase.instance.updateCustomer(_customers[idx]);
     }
     notifyListeners();
   }
 
-  Future<void> deleteTransaction(
-      String transactionId, String customerId) async {
+  Future<void> deleteTransaction(String transactionId, String customerId) async {
     final txList = _txMap[customerId] ?? [];
     final tx = txList.firstWhere(
       (t) => t.id == transactionId,
@@ -304,15 +323,13 @@ class CustomerProvider extends ChangeNotifier {
       ),
     );
     if (tx.id.isNotEmpty) {
-      await LocalDatabase.instance
-          .deleteCustomerTransaction(transactionId);
+      await LocalDatabase.instance.deleteCustomerTransaction(transactionId);
       _txMap[customerId]?.removeWhere((t) => t.id == transactionId);
       final idx = _customers.indexWhere((c) => c.id == customerId);
       if (idx != -1) {
         final current = _customers[idx];
         final delta = tx.isGiven ? -tx.amount : tx.amount;
-        _customers[idx] =
-            current.copyWith(balance: current.balance + delta);
+        _customers[idx] = current.copyWith(balance: current.balance + delta);
         await LocalDatabase.instance.updateCustomer(_customers[idx]);
       }
       notifyListeners();
@@ -320,10 +337,9 @@ class CustomerProvider extends ChangeNotifier {
   }
 }
 
-// Alias so any screen using CustomersProvider still works
 typedef CustomersProvider = CustomerProvider;
 
-// ── TransactionProvider (App-level cashbook ledger) ───────────────────────────
+// ── TransactionProvider ───────────────────────────────────────────────────────
 class TransactionProvider extends ChangeNotifier {
   final List<AppTransaction> _transactions = [];
   bool _loading = false;
@@ -333,16 +349,11 @@ class TransactionProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
-  double get totalIn => _transactions
-      .where((t) => t.isIncome)
-      .fold(0.0, (s, t) => s + t.amount);
-
-  double get totalOut => _transactions
-      .where((t) => !t.isIncome)
-      .fold(0.0, (s, t) => s + t.amount);
-
+  double get totalIn =>
+      _transactions.where((t) => t.isIncome).fold(0.0, (s, t) => s + t.amount);
+  double get totalOut =>
+      _transactions.where((t) => !t.isIncome).fold(0.0, (s, t) => s + t.amount);
   double get balance => totalIn - totalOut;
-
   double get totalGiven => totalOut;
   double get totalReceived => totalIn;
 
@@ -525,31 +536,24 @@ class BillProvider extends ChangeNotifier {
   List<Bill> get bills => List.unmodifiable(_bills);
   bool get loading => _loading;
 
-  List<Bill> get saleBills =>
-      _bills.where((b) => b.billType == BillType.sale).toList();
-  List<Bill> get purchaseBills =>
-      _bills.where((b) => b.billType == BillType.purchase).toList();
-  List<Bill> get expenseBills =>
-      _bills.where((b) => b.billType == BillType.expense).toList();
+  List<Bill> get saleBills => _bills.where((b) => b.billType == BillType.sale).toList();
+  List<Bill> get purchaseBills => _bills.where((b) => b.billType == BillType.purchase).toList();
+  List<Bill> get expenseBills => _bills.where((b) => b.billType == BillType.expense).toList();
 
-  double get totalSales =>
-      saleBills.fold(0.0, (s, b) => s + b.grandTotal);
-  double get totalPurchases =>
-      purchaseBills.fold(0.0, (s, b) => s + b.grandTotal);
+  double get totalSales => saleBills.fold(0.0, (s, b) => s + b.grandTotal);
+  double get totalPurchases => purchaseBills.fold(0.0, (s, b) => s + b.grandTotal);
 
   double get monthlySales {
     final now = DateTime.now();
     return saleBills
-        .where(
-            (b) => b.date.month == now.month && b.date.year == now.year)
+        .where((b) => b.date.month == now.month && b.date.year == now.year)
         .fold(0.0, (s, b) => s + b.grandTotal);
   }
 
   double get monthlyPurchases {
     final now = DateTime.now();
     return purchaseBills
-        .where(
-            (b) => b.date.month == now.month && b.date.year == now.year)
+        .where((b) => b.date.month == now.month && b.date.year == now.year)
         .fold(0.0, (s, b) => s + b.grandTotal);
   }
 
@@ -593,8 +597,6 @@ class BillProvider extends ChangeNotifier {
 }
 
 typedef BillsProvider = BillProvider;
-
-// ── BusinessProfileProvider alias ─────────────────────────────────────────────
 typedef BusinessProfileProvider = AuthProvider;
 
 // ── CashbookProvider ──────────────────────────────────────────────────────────
@@ -605,14 +607,10 @@ class CashbookProvider extends ChangeNotifier {
   List<CashbookEntry> get entries => List.unmodifiable(_entries);
   bool get loading => _loading;
 
-  double get totalIn => _entries
-      .where((e) => e.isCashIn)
-      .fold(0.0, (s, e) => s + e.amount);
-
-  double get totalOut => _entries
-      .where((e) => !e.isCashIn)
-      .fold(0.0, (s, e) => s + e.amount);
-
+  double get totalIn =>
+      _entries.where((e) => e.isCashIn).fold(0.0, (s, e) => s + e.amount);
+  double get totalOut =>
+      _entries.where((e) => !e.isCashIn).fold(0.0, (s, e) => s + e.amount);
   double get balance => totalIn - totalOut;
 
   Future<void> loadEntries() async {

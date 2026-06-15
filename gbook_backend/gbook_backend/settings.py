@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-gbook-change-this-in-production-xyz123')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,10.69.63.205,*').split(',')
+ALLOWED_HOSTS = ['10.189.89.205', '127.0.0.1', 'localhost', '.ngrok-free.dev', '.ngrok-free.app']
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',

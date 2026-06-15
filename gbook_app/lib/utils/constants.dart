@@ -5,7 +5,7 @@ class AppConstants {
 
   // ─── Base URL ─────────────────────────────────────────────────
   // Physical device (wireless) — your PC's LAN IP
-  static const String baseUrl = 'http://10.189.89.205:8000/api';
+ static const String baseUrl = 'https://resolved-matching-establish.ngrok-free.dev/api';
   // Android emulator
   // static const String baseUrl = 'http://10.0.2.2:8000/api';
   // iOS simulator

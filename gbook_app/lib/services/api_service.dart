@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
@@ -35,7 +36,6 @@ class ApiService {
 
   // ─── Auth ─────────────────────────────────────────────────────
 
-  /// Step 1: Send OTP to phone number
   Future<Map<String, dynamic>> sendOtp(String phone) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/send-otp/'),
@@ -45,7 +45,6 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  /// Step 2: Verify OTP — returns tokens + user on success
   Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/verify-otp/'),
@@ -55,7 +54,6 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  /// Logout — blacklists the refresh token
   Future<void> logout(String refreshToken) async {
     try {
       await http.post(
@@ -67,7 +65,6 @@ class ApiService {
     await clearTokens();
   }
 
-  /// Refresh access token using refresh token
   Future<Map<String, dynamic>> refreshToken(String refresh) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/token/refresh/'),
@@ -75,6 +72,20 @@ class ApiService {
       body: jsonEncode({'refresh': refresh}),
     );
     return _handleResponse(response);
+  }
+
+  // ─── FCM Token ← NEW ──────────────────────────────────────────
+  Future<void> saveFcmToken(String fcmToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/fcm-token/'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'token': fcmToken}),
+      );
+      debugPrint('✅ FCM token saved → ${response.statusCode}');
+    } catch (e) {
+      debugPrint('⚠️ FCM token save failed: $e');
+    }
   }
 
   // ─── Profile ──────────────────────────────────────────────────
@@ -106,8 +117,7 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  Future<Map<String, dynamic>> createBusiness(
-      Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> createBusiness(Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse('$baseUrl/business/create/'),
       headers: await _authHeaders(),
@@ -116,8 +126,7 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  Future<Map<String, dynamic>> updateBusiness(
-      Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> updateBusiness(Map<String, dynamic> data) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/business/'),
       headers: await _authHeaders(),
@@ -140,13 +149,8 @@ class ApiService {
 
   Future<List<Customer>> getCustomers({String? balanceFilter}) async {
     var url = '$baseUrl/customers/';
-    if (balanceFilter != null) {
-      url += '?balance_filter=$balanceFilter';
-    }
-    final response = await http.get(
-      Uri.parse(url),
-      headers: await _authHeaders(),
-    );
+    if (balanceFilter != null) url += '?balance_filter=$balanceFilter';
+    final response = await http.get(Uri.parse(url), headers: await _authHeaders());
     final data = _handleResponse(response);
     final list = data['results'] ?? data;
     return (list as List).map((e) => Customer.fromJson(e)).toList();
@@ -196,8 +200,7 @@ class ApiService {
     return (list as List).map((e) => AppTransaction.fromJson(e)).toList();
   }
 
-  Future<Map<String, dynamic>> sendReminder(
-      String customerId, String message) async {
+  Future<Map<String, dynamic>> sendReminder(String customerId, String message) async {
     final response = await http.post(
       Uri.parse('$baseUrl/customers/$customerId/remind/'),
       headers: await _authHeaders(),
@@ -270,8 +273,7 @@ class ApiService {
     return (list as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, dynamic>> createReminder(
-      Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> createReminder(Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse('$baseUrl/reminders/'),
       headers: await _authHeaders(),

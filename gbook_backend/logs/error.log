@@ -190,3 +190,5 @@ Traceback (most recent call last):
     ^^^^^^^^^^^^^^^
 AttributeError: 'super' object has no attribute 'dicts' and no __dict__ for setting new attributes
 ERROR 2026-06-03 12:54:26,450 basehttp 20000 424 "GET /admin/api/otpverification/ HTTP/1.1" 500 453896
+ERROR 2026-06-07 12:35:52,222 basehttp 12596 18332 You're accessing the development server over HTTPS, but it only supports HTTP.
+ERROR 2026-06-07 12:35:52,242 basehttp 12596 5264 You're accessing the development server over HTTPS, but it only supports HTTP.
