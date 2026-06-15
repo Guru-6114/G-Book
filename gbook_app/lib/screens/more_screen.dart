@@ -12,8 +12,14 @@ import 'cashbook_screen.dart';
 class MoreScreen extends StatelessWidget {
   // Called with tab index: 0=Parties, 1=Bills, 2=Items
   final void Function(int tabIndex)? onNavigateToTab;
+  // Called to switch to Bills tab AND select a specific sub-tab (0=Sale,1=Purchase,2=Expense)
+  final void Function(int tabIndex, {int? billSubTab})? onNavigateToTabWithSubTab;
 
-  const MoreScreen({super.key, this.onNavigateToTab});
+  const MoreScreen({
+    super.key,
+    this.onNavigateToTab,
+    this.onNavigateToTabWithSubTab,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -283,17 +289,20 @@ class MoreScreen extends StatelessWidget {
                   label: 'Shop\nInsurance',
                   onTap: () => _showComingSoon(context, 'Shop Insurance'),
                 ),
-                // 7. Expenses
+                // 7. Expenses — FIX: navigate to Bills tab (index 1) with Expense sub-tab (index 2)
                 _FeatureCard(
                   icon: Icons.payments_outlined,
                   iconColor: const Color(0xFFE65100),
                   iconBg: const Color(0xFFFFF3E0),
                   label: 'Expenses',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const ReportsScreen()),
-                  ),
+                  onTap: () {
+                    // Navigate to Bills tab first
+                    if (onNavigateToTabWithSubTab != null) {
+                      onNavigateToTabWithSubTab!(1, billSubTab: 2);
+                    } else if (onNavigateToTab != null) {
+                      onNavigateToTab!(1);
+                    }
+                  },
                 ),
                 // 8. Suppliers — switch to Parties tab (index 0)
                 _FeatureCard(

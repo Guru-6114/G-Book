@@ -153,8 +153,11 @@ class _PartiesScreenState extends State<PartiesScreen>
 
   @override
   Widget build(BuildContext context) {
+    // FIX: resizeToAvoidBottomInset: false prevents keyboard from
+    // pushing bottom buttons up and causing overflow
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         automaticallyImplyLeading: false,
@@ -373,6 +376,8 @@ class _CustomersTabState extends State<_CustomersTab> {
 
         const Divider(height: 1),
 
+        // FIX: Expanded so list fills space; bottom ADD CUSTOMER is
+        // inside Column so keyboard doesn't push it (resizeToAvoidBottomInset: false)
         Expanded(
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
@@ -520,6 +525,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
         ),
         const Divider(height: 1),
 
+        // FIX: Expanded wraps the list to prevent overflow
         Expanded(
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
@@ -626,7 +632,6 @@ class _SupplierTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // FIX: formatCurrencyCompact already includes ₹, no prefix needed
                   Text(
                     AppHelpers.formatCurrencyCompact(balance.abs()),
                     style: TextStyle(
@@ -798,6 +803,8 @@ class _SupplierScreenState extends State<SupplierScreen> {
     final dateKeys = grouped.keys.toList();
 
     return Scaffold(
+      // FIX: false so bottom buttons don't get pushed by keyboard
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF0F0F0),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1565C0),
@@ -881,7 +888,6 @@ class _SupplierScreenState extends State<SupplierScreen> {
                         color: balanceColor,
                         fontWeight: FontWeight.w600,
                         fontSize: 15)),
-                // FIX: formatCurrencyCompact already includes ₹
                 Text(
                   AppHelpers.formatCurrencyCompact(balance.abs()),
                   style: TextStyle(
@@ -918,7 +924,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
             ),
           ),
 
-          // Transactions
+          // FIX: Expanded so list fills remaining space without overflow
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -968,8 +974,8 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 4),
-                                  child: Row(
-                                    children: const [
+                                  child: const Row(
+                                    children: [
                                       Expanded(
                                         flex: 3,
                                         child: Text('ENTRIES',
@@ -1013,52 +1019,56 @@ class _SupplierScreenState extends State<SupplierScreen> {
                         ),
                       ),
           ),
-        ],
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD32F2F),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+          // FIX: Bottom bar inside Column so keyboard doesn't push it up
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 10,
+              bottom: MediaQuery.of(context).padding.bottom + 10,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD32F2F),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _showAddTransaction(true),
+                    child: const Text('YOU GAVE  ₹',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            letterSpacing: 0.5)),
                   ),
-                  onPressed: () => _showAddTransaction(true),
-                  child: const Text('YOU GAVE  ₹',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          letterSpacing: 0.5)),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1B5E20),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1B5E20),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => _showAddTransaction(false),
+                    child: const Text('YOU GOT  ₹',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            letterSpacing: 0.5)),
                   ),
-                  onPressed: () => _showAddTransaction(false),
-                  child: const Text('YOU GOT  ₹',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          letterSpacing: 0.5)),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1155,11 +1165,9 @@ class _SupplierTxRow extends StatelessWidget {
                 ],
               ),
             ),
-            // YOU GAVE column
             Expanded(
               child: isGave
                   ? Text(
-                      // FIX: formatCurrencyCompact already includes ₹
                       AppHelpers.formatCurrencyCompact(tx.amount),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -1169,11 +1177,9 @@ class _SupplierTxRow extends StatelessWidget {
                     )
                   : const SizedBox(),
             ),
-            // YOU GOT column
             Expanded(
               child: !isGave
                   ? Text(
-                      // FIX: formatCurrencyCompact already includes ₹
                       AppHelpers.formatCurrencyCompact(tx.amount),
                       textAlign: TextAlign.end,
                       style: const TextStyle(
@@ -1341,9 +1347,6 @@ class _SupplierTransactionSheetState
 }
 
 // ── Shared Widgets ────────────────────────────────────────────────────────────
-
-/// FIX: _SummaryCard now uses formatCurrencyCompact directly (no extra ₹ prefix)
-/// because formatCurrencyCompact already returns strings like "₹400", "₹1.2K" etc.
 class _SummaryCard extends StatelessWidget {
   final String label;
   final double amount;
@@ -1362,8 +1365,6 @@ class _SummaryCard extends StatelessWidget {
                 const TextStyle(fontSize: 12, color: Color(0xFF757575))),
         const SizedBox(height: 4),
         Text(
-          // FIX: was '₹${AppHelpers.formatCurrencyCompact(amount)}'
-          // which caused double ₹ since formatCurrencyCompact already includes ₹
           AppHelpers.formatCurrencyCompact(amount),
           style: TextStyle(
               color: color, fontSize: 20, fontWeight: FontWeight.w800),
@@ -1519,7 +1520,6 @@ class _CustomerTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // FIX: formatCurrencyCompact already includes ₹
                   Text(
                     AppHelpers.formatCurrencyCompact(balance.abs()),
                     style: TextStyle(
@@ -1594,37 +1594,39 @@ class _CustomerEmptyState extends StatelessWidget {
             ),
           ),
         ),
+        // FIX: bottom bar inside Column, not in SafeArea bottomNavigationBar
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 12),
-          child: SafeArea(
-            top: false,
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward,
-                      color: Color(0xFF1565C0)),
-                  onPressed: () {},
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(context).padding.bottom + 12,
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_forward,
+                    color: Color(0xFF1565C0)),
+                onPressed: () {},
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: onAddCustomer,
+                icon: const Icon(Icons.person_add, size: 18),
+                label: const Text('ADD CUSTOMER',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
                 ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: onAddCustomer,
-                  icon: const Icon(Icons.person_add, size: 18),
-                  label: const Text('ADD CUSTOMER',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accentRed,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24)),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -1677,25 +1679,26 @@ class _SupplierEmptyState extends StatelessWidget {
         ),
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 12),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onAddSupplier,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('ADD SUPPLIER',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                ),
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 12,
+            bottom: MediaQuery.of(context).padding.bottom + 12,
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onAddSupplier,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('ADD SUPPLIER',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 14)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24)),
               ),
             ),
           ),
