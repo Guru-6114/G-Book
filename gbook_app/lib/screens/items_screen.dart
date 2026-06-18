@@ -89,16 +89,26 @@ class _ItemsScreenState extends State<ItemsScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : items.isEmpty
                     ? EmptyState(
-                        title: 'No items yet',
-                        subtitle:
-                            'Add items to use them in bills',
+                        title: _query.isEmpty
+                            ? 'No items yet'
+                            : 'No items found',
+                        subtitle: _query.isEmpty
+                            ? 'Add items to use them in bills'
+                            : 'Try a different search',
                         icon: Icons.inventory_2_outlined,
-                        actionLabel: 'Add Item',
-                        onAction: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const AddItemScreen()),
-                        ),
+                        // FIX: only show the "Add Item" action button on the
+                        // truly-empty state (no items at all). When the user
+                        // is searching and just gets no results, we don't
+                        // want a second Add Item button competing with the
+                        // AppBar's "+" — this was the duplicate-button bug.
+                        actionLabel: _query.isEmpty ? 'Add Item' : null,
+                        onAction: _query.isEmpty
+                            ? () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const AddItemScreen()),
+                                )
+                            : null,
                       )
                     : RefreshIndicator(
                         onRefresh: () =>
@@ -115,14 +125,11 @@ class _ItemsScreenState extends State<ItemsScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AddItemScreen()),
-        ),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Item'),
-      ),
+      // FIX: removed the FloatingActionButton.extended("Add Item") that used
+      // to render at the same time as the EmptyState's own "Add Item"
+      // button, causing two overlapping "Add Item" buttons on screen
+      // (as seen in the bug screenshot). Khatabook only has the single "+"
+      // in the AppBar plus the one button in the empty state — no FAB here.
     );
   }
 }
