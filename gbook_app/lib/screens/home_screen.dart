@@ -174,6 +174,70 @@ class _BillsScreenState extends State<_BillsScreen>
     }
   }
 
+  // FIX (Sale Return / Purchase Return not working):
+  // A return is always *against* an existing Sale or Purchase bill — that's
+  // why AddReturnScreen requires an `originalBill`. The old "MORE" sheet
+  // routed Sale Return / Purchase Return straight into _openAddBill(type),
+  // which opened the generic AddBillScreen with no original bill attached
+  // at all — that screen isn't built to handle return types correctly,
+  // which is why nothing useful happened.
+  //
+  // Fix: when the user picks Sale Return / Purchase Return from the MORE
+  // sheet, first show a picker of existing Sale/Purchase bills, then open
+  // the SAME working AddReturnScreen that BillDetailScreen already uses
+  // successfully when you tap "+ SALE RETURN" from inside a bill.
+  Future<void> _openReturnFlow(BillType returnType) async {
+    final billProvider = context.read<BillProvider>();
+    final sourceType = returnType == BillType.saleReturn
+        ? BillType.sale
+        : BillType.purchase;
+    final sourceBills =
+        billProvider.bills.where((b) => b.billType == sourceType).toList();
+
+    if (sourceBills.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sourceType == BillType.sale
+                ? 'No sale bills yet to create a return against'
+                : 'No purchase bills yet to create a return against',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final selectedBill = await showModalBottomSheet<Bill>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _SelectBillSheet(
+        bills: sourceBills,
+        title: sourceType == BillType.sale
+            ? 'Select Sale Bill to Return'
+            : 'Select Purchase Bill to Return',
+      ),
+    );
+
+    if (selectedBill == null || !mounted) return;
+
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddReturnScreen(
+          originalBill: selectedBill,
+          returnType: returnType,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      context.read<BillProvider>().loadBills();
+    }
+  }
+
   void _openMoreOptions() {
     showModalBottomSheet(
       context: context,
@@ -183,7 +247,9 @@ class _BillsScreenState extends State<_BillsScreen>
       builder: (_) => _MoreOptionsSheet(
         onSelected: (type) {
           Navigator.pop(context);
-          _openAddBill(type);
+          // FIX: route returns through the bill-picker flow above instead
+          // of the plain AddBillScreen path.
+          _openReturnFlow(type);
         },
       ),
     );
@@ -842,6 +908,136 @@ class _BillTile extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SELECT BILL SHEET (new) — lets the user pick which existing Sale/Purchase
+// bill a return should be created against. This is the missing link that
+// makes "MORE > Sale Return / Purchase Return" actually work, since
+// AddReturnScreen always needs an `originalBill` to copy items/party from.
+// ══════════════════════════════════════════════════════════════════════════════
+class _SelectBillSheet extends StatefulWidget {
+  final List<Bill> bills;
+  final String title;
+
+  const _SelectBillSheet({required this.bills, required this.title});
+
+  @override
+  State<_SelectBillSheet> createState() => _SelectBillSheetState();
+}
+
+class _SelectBillSheetState extends State<_SelectBillSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _query.isEmpty
+        ? widget.bills
+        : widget.bills
+            .where((b) =>
+                b.billNumber.toLowerCase().contains(_query.toLowerCase()) ||
+                (b.partyName ?? '')
+                    .toLowerCase()
+                    .contains(_query.toLowerCase()))
+            .toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(widget.title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search bill number or party',
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: const Color(0xFFF5F5F5),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: filtered.isEmpty
+                ? Center(
+                    child: Text('No bills found',
+                        style: TextStyle(color: Colors.grey.shade500)),
+                  )
+                : ListView.separated(
+                    controller: scrollCtrl,
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, indent: 16),
+                    itemBuilder: (_, i) {
+                      final bill = filtered[i];
+                      return ListTile(
+                        leading: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor
+                                .withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.receipt_long,
+                              color: AppTheme.primaryColor, size: 20),
+                        ),
+                        title: Text(bill.billNumber,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text(
+                          '${bill.partyName ?? 'No party'} • ${AppHelpers.formatDate(bill.date)}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: Text(
+                          AppHelpers.formatCurrencyCompact(bill.grandTotal),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                        onTap: () => Navigator.pop(context, bill),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // BILL DETAIL SCREEN
 // ══════════════════════════════════════════════════════════════════════════════
 class BillDetailScreen extends StatelessWidget {
@@ -1266,11 +1462,16 @@ class BillDetailScreen extends StatelessWidget {
     );
   }
 
-  void _openAddReturn(BuildContext context) {
+  // FIX: now awaits the result of AddReturnScreen and, when a return was
+  // actually generated (popped with `true`), refreshes BillProvider so
+  // the new return shows up immediately if the user navigates back to the
+  // Bills list — previously this fired-and-forgot the navigation with no
+  // refresh signal at all.
+  void _openAddReturn(BuildContext context) async {
     final returnType = bill.billType == BillType.sale
         ? BillType.saleReturn
         : BillType.purchaseReturn;
-    Navigator.push(
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => AddReturnScreen(
@@ -1279,6 +1480,9 @@ class BillDetailScreen extends StatelessWidget {
         ),
       ),
     );
+    if (result == true && context.mounted) {
+      context.read<BillProvider>().loadBills();
+    }
   }
 
   void _openViewPdf(BuildContext context) {
