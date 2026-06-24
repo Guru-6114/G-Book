@@ -1,6 +1,6 @@
 // lib/services/local_database.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// SQLite local database for GBook app
+// SQLite local database for GBook app — multi-khatabook support
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -22,11 +22,13 @@ class LocalDatabase {
     final path = join(dbPath, 'gbook.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2, // bumped from 1 → 2 for multi-book support
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
+  // ── Create all tables fresh (new install) ─────────────────────────────────
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE business_profile (
@@ -38,7 +40,8 @@ class LocalDatabase {
         address TEXT,
         gstin TEXT,
         category TEXT,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        isActive INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -50,7 +53,8 @@ class LocalDatabase {
         email TEXT,
         address TEXT,
         balance REAL NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -63,6 +67,7 @@ class LocalDatabase {
         note TEXT,
         paymentMode TEXT NOT NULL DEFAULT 'cash',
         date TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT '',
         FOREIGN KEY (customerId) REFERENCES customers(id)
       )
     ''');
@@ -75,7 +80,8 @@ class LocalDatabase {
         category TEXT,
         note TEXT,
         paymentMode TEXT NOT NULL DEFAULT 'cash',
-        date TEXT NOT NULL
+        date TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -86,7 +92,8 @@ class LocalDatabase {
         isCashIn INTEGER NOT NULL DEFAULT 1,
         description TEXT,
         paymentMode TEXT NOT NULL DEFAULT 'cash',
-        date TEXT NOT NULL
+        date TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -99,7 +106,8 @@ class LocalDatabase {
         address TEXT,
         gstin TEXT,
         balance REAL NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -113,7 +121,8 @@ class LocalDatabase {
         unit TEXT NOT NULL DEFAULT 'piece',
         category TEXT,
         description TEXT,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -132,7 +141,8 @@ class LocalDatabase {
         paidAmount REAL NOT NULL DEFAULT 0,
         notes TEXT,
         date TEXT NOT NULL,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -152,29 +162,127 @@ class LocalDatabase {
     ''');
   }
 
+  // ── Migrate existing DB from v1 → v2 ─────────────────────────────────────
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add isActive to business_profile
+      try {
+        await db.execute(
+            'ALTER TABLE business_profile ADD COLUMN isActive INTEGER NOT NULL DEFAULT 0');
+      } catch (_) {} // column may already exist if migration ran partially
+
+      // Mark the first existing profile as active so the user isn't logged out
+      final profiles = await db.query('business_profile', limit: 1);
+      if (profiles.isNotEmpty) {
+        await db.update(
+          'business_profile',
+          {'isActive': 1},
+          where: 'id = ?',
+          whereArgs: [profiles.first['id']],
+        );
+      }
+
+      // Add bookId to every data table (existing rows get empty string = "all books" fallback)
+      final tables = [
+        'customers',
+        'customer_transactions',
+        'app_transactions',
+        'cashbook_entries',
+        'suppliers',
+        'items',
+        'bills',
+      ];
+      for (final table in tables) {
+        try {
+          await db.execute(
+              "ALTER TABLE $table ADD COLUMN bookId TEXT NOT NULL DEFAULT ''");
+        } catch (_) {}
+      }
+    }
+  }
+
   // ── BusinessProfile ───────────────────────────────────────────────────────
 
+  /// Returns the currently active business profile, or null if none.
   Future<BusinessProfile?> getBusinessProfile() async {
     final db = await database;
-    final maps = await db.query('business_profile', limit: 1);
+    final maps = await db.query(
+      'business_profile',
+      where: 'isActive = 1',
+      limit: 1,
+    );
     if (maps.isEmpty) return null;
     return BusinessProfile.fromMap(maps.first);
   }
 
-  Future<void> saveBusinessProfile(BusinessProfile profile) async {
+  /// Returns ALL business profiles (for book switcher).
+  Future<List<BusinessProfile>> getAllBusinessProfiles() async {
     final db = await database;
+    final maps = await db.query('business_profile', orderBy: 'createdAt ASC');
+    return maps.map((m) => BusinessProfile.fromMap(m)).toList();
+  }
+
+  /// Save (insert or replace) a profile. Optionally make it the active one.
+  Future<void> saveBusinessProfile(BusinessProfile profile,
+      {bool makeActive = false}) async {
+    final db = await database;
+    final map = Map<String, dynamic>.from(profile.toMap());
+    if (makeActive) {
+      // Deactivate all others first
+      await db.update('business_profile', {'isActive': 0});
+      map['isActive'] = 1;
+    } else {
+      // Preserve existing isActive value if not explicitly setting
+      final existing = await db.query(
+        'business_profile',
+        where: 'id = ?',
+        whereArgs: [profile.id],
+        limit: 1,
+      );
+      map['isActive'] =
+          existing.isNotEmpty ? (existing.first['isActive'] ?? 0) : 0;
+    }
     await db.insert(
       'business_profile',
-      profile.toMap(),
+      map,
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Create a brand-new profile (does NOT make it active automatically).
+  Future<void> createBusinessProfile(BusinessProfile profile) async {
+    final db = await database;
+    final map = Map<String, dynamic>.from(profile.toMap());
+    map['isActive'] = 0;
+    await db.insert(
+      'business_profile',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Switch the active profile to [bookId].
+  Future<void> setActiveBusinessProfile(String bookId) async {
+    final db = await database;
+    await db.update('business_profile', {'isActive': 0});
+    await db.update(
+      'business_profile',
+      {'isActive': 1},
+      where: 'id = ?',
+      whereArgs: [bookId],
     );
   }
 
   // ── Customers ─────────────────────────────────────────────────────────────
 
-  Future<List<Customer>> getCustomers() async {
+  Future<List<Customer>> getCustomers(String bookId) async {
     final db = await database;
-    final maps = await db.query('customers', orderBy: 'name ASC');
+    final maps = await db.query(
+      'customers',
+      where: bookId.isEmpty ? null : 'bookId = ?',
+      whereArgs: bookId.isEmpty ? null : [bookId],
+      orderBy: 'name ASC',
+    );
     return maps.map((m) => Customer.fromMap(m)).toList();
   }
 
@@ -238,11 +346,19 @@ class LocalDatabase {
 
   // ── AppTransactions ───────────────────────────────────────────────────────
 
-  Future<List<AppTransaction>> getTransactions(
-      {DateTime? from, DateTime? to}) async {
+  Future<List<AppTransaction>> getTransactions({
+    String bookId = '',
+    DateTime? from,
+    DateTime? to,
+  }) async {
     final db = await database;
     final conditions = <String>[];
     final args = <Object?>[];
+
+    if (bookId.isNotEmpty) {
+      conditions.add('bookId = ?');
+      args.add(bookId);
+    }
     if (from != null) {
       conditions.add('date >= ?');
       args.add(from.toIso8601String());
@@ -276,9 +392,14 @@ class LocalDatabase {
 
   // ── Suppliers ─────────────────────────────────────────────────────────────
 
-  Future<List<Supplier>> getSuppliers() async {
+  Future<List<Supplier>> getSuppliers(String bookId) async {
     final db = await database;
-    final maps = await db.query('suppliers', orderBy: 'name ASC');
+    final maps = await db.query(
+      'suppliers',
+      where: bookId.isEmpty ? null : 'bookId = ?',
+      whereArgs: bookId.isEmpty ? null : [bookId],
+      orderBy: 'name ASC',
+    );
     return maps.map((m) => Supplier.fromMap(m)).toList();
   }
 
@@ -309,9 +430,14 @@ class LocalDatabase {
 
   // ── Items ─────────────────────────────────────────────────────────────────
 
-  Future<List<Item>> getItems() async {
+  Future<List<Item>> getItems(String bookId) async {
     final db = await database;
-    final maps = await db.query('items', orderBy: 'name ASC');
+    final maps = await db.query(
+      'items',
+      where: bookId.isEmpty ? null : 'bookId = ?',
+      whereArgs: bookId.isEmpty ? null : [bookId],
+      orderBy: 'name ASC',
+    );
     return maps.map((m) => Item.fromMap(m)).toList();
   }
 
@@ -342,11 +468,20 @@ class LocalDatabase {
 
   // ── Bills ─────────────────────────────────────────────────────────────────
 
-  Future<List<Bill>> getBills(
-      {BillType? type, DateTime? from, DateTime? to}) async {
+  Future<List<Bill>> getBills({
+    String bookId = '',
+    BillType? type,
+    DateTime? from,
+    DateTime? to,
+  }) async {
     final db = await database;
     final conditions = <String>[];
     final args = <Object?>[];
+
+    if (bookId.isNotEmpty) {
+      conditions.add('bookId = ?');
+      args.add(bookId);
+    }
     if (type != null) {
       conditions.add('billType = ?');
       args.add(type.name);
@@ -405,22 +540,36 @@ class LocalDatabase {
     });
   }
 
-  Future<int> getNextBillNumber(BillType type) async {
+  Future<int> getNextBillNumber(String bookId, BillType type) async {
     final db = await database;
+    final conditions = ['billType = ?'];
+    final args = <Object?>[type.name];
+    if (bookId.isNotEmpty) {
+      conditions.add('bookId = ?');
+      args.add(bookId);
+    }
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM bills WHERE billType = ?',
-      [type.name],
+      'SELECT COUNT(*) as count FROM bills WHERE ${conditions.join(' AND ')}',
+      args,
     );
     return ((result.first['count'] as int?) ?? 0) + 1;
   }
 
   // ── Cashbook ──────────────────────────────────────────────────────────────
 
-  Future<List<CashbookEntry>> getCashbookEntries(
-      {DateTime? from, DateTime? to}) async {
+  Future<List<CashbookEntry>> getCashbookEntries({
+    String bookId = '',
+    DateTime? from,
+    DateTime? to,
+  }) async {
     final db = await database;
     final conditions = <String>[];
     final args = <Object?>[];
+
+    if (bookId.isNotEmpty) {
+      conditions.add('bookId = ?');
+      args.add(bookId);
+    }
     if (from != null) {
       conditions.add('date >= ?');
       args.add(from.toIso8601String());

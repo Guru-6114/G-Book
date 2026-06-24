@@ -55,14 +55,9 @@ class _AddBillScreenState extends State<AddBillScreen> {
 
     setState(() => _saving = true);
     try {
-      // FIX: capture provider references BEFORE the async gap
       final billsProvider = context.read<BillProvider>();
       final itemsProvider = context.read<ItemProvider>();
-
       final billNo = await billsProvider.nextBillNumber(widget.billType);
-
-      // FIX: mounted check after every await
-      if (!mounted) return;
 
       final paid =
           _fullyPaid ? _totalAmount : double.tryParse(_paidCtrl.text) ?? 0;
@@ -99,23 +94,15 @@ class _AddBillScreenState extends State<AddBillScreen> {
         paidAmount: paid,
         date: _date,
         createdAt: now,
-        notes:
-            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
 
-      // FIX: addBill() inserts into BillProvider's in-memory list AND the
-      // local DB, and calls notifyListeners() — but the bills tab needs to
-      // know to reload from this screen's caller too (handled by popping
-      // with `true` below, which BillsScreen listens for).
       await billsProvider.addBill(bill);
 
+      // Adjust stock if sale or purchase — check mounted before using context
       if (!mounted) return;
-
-      // Adjust stock if sale, purchase, or a return of either
       if (widget.billType == BillType.sale ||
-          widget.billType == BillType.purchase ||
-          widget.billType == BillType.saleReturn ||
-          widget.billType == BillType.purchaseReturn) {
+          widget.billType == BillType.purchase) {
         final currentItems = List<_BillItemRow>.from(_items);
         final currentType = widget.billType;
         for (final row in currentItems) {
@@ -125,32 +112,15 @@ class _AddBillScreenState extends State<AddBillScreen> {
               (i) => i.name.toLowerCase() == name,
             );
             final qty = double.tryParse(row.qtyCtrl.text) ?? 0;
-            // Sale / Purchase Return reverse the stock direction of their
-            // counterpart bill type.
-            final delta = switch (currentType) {
-              BillType.sale => -qty, // stock goes out
-              BillType.purchase => qty, // stock comes in
-              BillType.saleReturn => qty, // returned stock comes back in
-              BillType.purchaseReturn => -qty, // returned stock goes out
-              BillType.expense => 0.0,
-            };
-            if (delta != 0) {
-              await itemsProvider.adjustStock(item.id, delta);
-            }
+            await itemsProvider.adjustStock(
+              item.id,
+              currentType == BillType.sale ? -qty : qty,
+            );
           } catch (_) {}
         }
       }
 
-      // FIX: pop with `true` so the caller (BillsScreen) knows to reload
-      // its bill list — this is what makes a newly-saved bill actually
-      // show up immediately instead of needing an app restart.
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving: $e')),
-        );
-      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -161,10 +131,6 @@ class _AddBillScreenState extends State<AddBillScreen> {
     _partyCtrl.dispose();
     _notesCtrl.dispose();
     _paidCtrl.dispose();
-    // FIX: dispose all item row controllers
-    for (final item in _items) {
-      item.dispose();
-    }
     super.dispose();
   }
 
@@ -189,19 +155,9 @@ class _AddBillScreenState extends State<AddBillScreen> {
                           controller: _partyCtrl,
                           textCapitalization: TextCapitalization.words,
                           decoration: InputDecoration(
-                            // FIX: Sale Return now also shows "Customer Name"
-                            // and Purchase Return shows "Supplier Name" —
-                            // previously only `sale`/`purchase` were
-                            // handled, so returns always showed "Supplier
-                            // Name" regardless of type.
-                            labelText: widget.billType == BillType.sale ||
-                                    widget.billType == BillType.saleReturn
+                            labelText: widget.billType == BillType.sale
                                 ? 'Customer Name (optional)'
-                                : widget.billType == BillType.purchase ||
-                                        widget.billType ==
-                                            BillType.purchaseReturn
-                                    ? 'Supplier Name (optional)'
-                                    : 'Party Name (optional)',
+                                : 'Supplier Name (optional)',
                             prefixIcon:
                                 const Icon(Icons.person_outline, size: 18),
                           ),
@@ -215,7 +171,7 @@ class _AddBillScreenState extends State<AddBillScreen> {
                               firstDate: DateTime(2020),
                               lastDate: DateTime.now(),
                             );
-                            if (picked != null && mounted) {
+                            if (picked != null) {
                               setState(() => _date = picked);
                             }
                           },
@@ -252,7 +208,6 @@ class _AddBillScreenState extends State<AddBillScreen> {
                               style: TextStyle(
                                   fontWeight: FontWeight.w600, fontSize: 14),
                             ),
-                            // FIX #8: Only ONE "Add Item" button here (removed duplicate)
                             TextButton.icon(
                               onPressed: () =>
                                   setState(() => _items.add(_BillItemRow())),
@@ -536,8 +491,7 @@ class _PaymentModeSelector extends StatelessWidget {
                   : Colors.grey[100],
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color:
-                    isSelected ? AppColors.primary : Colors.grey[300]!,
+                color: isSelected ? AppColors.primary : Colors.grey[300]!,
               ),
             ),
             child: Text(
@@ -569,13 +523,6 @@ class _BillItemRow {
     final price = double.tryParse(priceCtrl.text) ?? 0;
     return qty * price * (1 + taxPercent / 100);
   }
-
-  // FIX: Added dispose method to prevent memory leaks / ANR
-  void dispose() {
-    nameCtrl.dispose();
-    qtyCtrl.dispose();
-    priceCtrl.dispose();
-  }
 }
 
 // ── Item row widget ───────────────────────────────────────────────────────────
@@ -598,22 +545,17 @@ class _ItemRowWidget extends StatefulWidget {
 }
 
 class _ItemRowWidgetState extends State<_ItemRowWidget> {
-  // FIX #1,2,3,7: Use a dedicated TextEditingController for the autocomplete
-  // field that is properly synced — avoids the ANR caused by listener loops
-  // and ensures autocomplete suggestions actually appear.
-  late final TextEditingController _autoCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _autoCtrl = TextEditingController(text: widget.row.nameCtrl.text);
-  }
-
-  @override
-  void dispose() {
-    _autoCtrl.dispose();
-    super.dispose();
-  }
+  // FIX (ANR / freeze): this row used to call `ctrl.addListener(...)`
+  // inside `fieldViewBuilder`, which Flutter invokes on every rebuild.
+  // Since the listener was never removed, every keystroke piled another
+  // listener on top of the same controller — after typing a few
+  // characters, a single keystroke could fire dozens of stacked
+  // listeners (each one triggering another setState/rebuild), which is
+  // what froze the UI thread and produced the "isn't responding" dialog.
+  // Fix: seed the field's text exactly once, and use TextFormField's
+  // `onChanged` callback (which simply gets replaced each build, never
+  // stacked) instead of attaching a controller listener.
+  bool _nameFieldInitialized = false;
 
   @override
   Widget build(BuildContext context) {
@@ -629,49 +571,44 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
           Row(
             children: [
               Expanded(
-                // FIX #7: Properly wired Autocomplete so suggestions appear.
-                // Root cause of ANR: the old code called ctrl.addListener
-                // inside fieldViewBuilder on every rebuild, stacking up
-                // listeners indefinitely and blocking the UI thread.
                 child: Autocomplete<String>(
-                  optionsBuilder: (textEditingValue) {
-                    final query = textEditingValue.text.trim().toLowerCase();
-                    if (query.isEmpty) return const Iterable<String>.empty();
+                  optionsBuilder: (textValue) {
+                    if (textValue.text.isEmpty) return const [];
                     return widget.availableItems
-                        .where((i) =>
-                            i.name.toLowerCase().contains(query))
+                        .where((i) => i.name
+                            .toLowerCase()
+                            .contains(textValue.text.toLowerCase()))
                         .map((i) => i.name);
                   },
                   onSelected: (name) {
                     widget.row.nameCtrl.text = name;
-                    _autoCtrl.text = name;
                     try {
                       final item = widget.availableItems
                           .firstWhere((i) => i.name == name);
                       widget.row.priceCtrl.text =
-                          item.salePrice.toStringAsFixed(2);
+                          item.salePrice.toString();
                       widget.row.unit = item.unit.name.toUpperCase();
                     } catch (_) {}
                     widget.onChanged();
                   },
-                  // FIX: Use initialValue so the field controller is managed
-                  // internally by Autocomplete — no manual listener needed.
-                  initialValue: TextEditingValue(
-                      text: widget.row.nameCtrl.text),
                   fieldViewBuilder:
-                      (context, fieldCtrl, focusNode, onFieldSubmitted) {
+                      (context, ctrl, focusNode, onSubmit) {
+                    if (!_nameFieldInitialized) {
+                      ctrl.text = widget.row.nameCtrl.text;
+                      _nameFieldInitialized = true;
+                    }
                     return TextFormField(
-                      controller: fieldCtrl,
+                      controller: ctrl,
                       focusNode: focusNode,
                       textCapitalization: TextCapitalization.words,
-                      onChanged: (v) {
-                        widget.row.nameCtrl.text = v;
-                        widget.onChanged();
-                      },
                       validator: (v) =>
                           (v == null || v.trim().isEmpty)
                               ? 'Required'
                               : null,
+                      onChanged: (v) {
+                        widget.row.nameCtrl.text = v;
+                        widget.onChanged();
+                      },
                       decoration: const InputDecoration(
                         hintText: 'Item name',
                         contentPadding: EdgeInsets.symmetric(
@@ -696,7 +633,6 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
           Row(
             children: [
               Expanded(
-                flex: 2,
                 child: TextFormField(
                   controller: widget.row.qtyCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -706,22 +642,21 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                       double.tryParse(v ?? '') == null ? 'Invalid' : null,
                   decoration: const InputDecoration(
                     labelText: 'Qty',
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
                     isDense: true,
                   ),
                 ),
               ),
               const SizedBox(width: 6),
-              Expanded(
-                flex: 2,
+              SizedBox(
+                width: 80,
                 child: DropdownButtonFormField<String>(
-                  value: widget.row.unit,
+                  initialValue: widget.row.unit,
                   isDense: true,
-                  isExpanded: true,
                   decoration: const InputDecoration(
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
                   items: ['PCS', 'KGS', 'LTR', 'MTR', 'BOX', 'PKT']
@@ -738,7 +673,6 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
               ),
               const SizedBox(width: 6),
               Expanded(
-                flex: 3,
                 child: TextFormField(
                   controller: widget.row.priceCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -748,8 +682,8 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                       double.tryParse(v ?? '') == null ? 'Invalid' : null,
                   decoration: const InputDecoration(
                     labelText: 'Price ₹',
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
                     isDense: true,
                   ),
                 ),

@@ -34,13 +34,23 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
   int _billsInitialSubTab = 0;
+  // Track whether current tab was navigated from More screen
+  bool _fromMore = false;
 
-  void _switchTab(int index, {int? billSubTab}) {
+  void _switchTab(int index, {int? billSubTab, bool fromMore = false}) {
     setState(() {
       _tab = index;
+      _fromMore = fromMore;
       if (index == 1 && billSubTab != null) {
         _billsInitialSubTab = billSubTab;
       }
+    });
+  }
+
+  void _goBackToMore() {
+    setState(() {
+      _tab = 3;
+      _fromMore = false;
     });
   }
 
@@ -51,22 +61,31 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _tab,
         children: [
-          const PartiesScreen(),
+          PartiesScreen(
+            fromMore: _tab == 0 && _fromMore,
+            onBackToMore: _goBackToMore,
+          ),
           _BillsScreen(
-            key: ValueKey('bills_$_billsInitialSubTab'),
+            key: ValueKey('bills_${_billsInitialSubTab}_${_tab == 1 && _fromMore}'),
             initialSubTab: _billsInitialSubTab,
+            fromMore: _tab == 1 && _fromMore,
             onGoToReports: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ReportsScreen()),
               );
             },
+            onBackToMore: _goBackToMore,
           ),
-          const ItemsScreen(),
+          ItemsScreen(
+            fromMore: _tab == 2 && _fromMore,
+            onBackToMore: _goBackToMore,
+          ),
           MoreScreen(
-            onNavigateToTab: (index) => _switchTab(index),
+            onNavigateToTab: (index) =>
+                _switchTab(index, fromMore: true),
             onNavigateToTabWithSubTab: (index, {billSubTab}) =>
-                _switchTab(index, billSubTab: billSubTab),
+                _switchTab(index, billSubTab: billSubTab, fromMore: true),
           ),
         ],
       ),
@@ -74,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _tab,
         onTap: (i) => setState(() {
           _tab = i;
+          _fromMore = false;
           if (i == 1) _billsInitialSubTab = 0;
         }),
         items: const [
@@ -104,12 +124,16 @@ class _HomeScreenState extends State<HomeScreen> {
 // ══════════════════════════════════════════════════════════════════════════════
 class _BillsScreen extends StatefulWidget {
   final VoidCallback onGoToReports;
+  final VoidCallback? onBackToMore;
   final int initialSubTab;
+  final bool fromMore;
 
   const _BillsScreen({
     super.key,
     required this.onGoToReports,
+    this.onBackToMore,
     this.initialSubTab = 0,
+    this.fromMore = false,
   });
 
   @override
@@ -156,6 +180,17 @@ class _BillsScreenState extends State<_BillsScreen>
     }
   }
 
+  List<BillType> get _currentTabBillTypes {
+    switch (_tabs.index) {
+      case 1:
+        return [BillType.purchase, BillType.purchaseReturn];
+      case 2:
+        return [BillType.expense];
+      default:
+        return [BillType.sale, BillType.saleReturn];
+    }
+  }
+
   void _openAddBill(BillType type) async {
     bool? result;
     if (type == BillType.expense) {
@@ -174,18 +209,6 @@ class _BillsScreenState extends State<_BillsScreen>
     }
   }
 
-  // FIX (Sale Return / Purchase Return not working):
-  // A return is always *against* an existing Sale or Purchase bill — that's
-  // why AddReturnScreen requires an `originalBill`. The old "MORE" sheet
-  // routed Sale Return / Purchase Return straight into _openAddBill(type),
-  // which opened the generic AddBillScreen with no original bill attached
-  // at all — that screen isn't built to handle return types correctly,
-  // which is why nothing useful happened.
-  //
-  // Fix: when the user picks Sale Return / Purchase Return from the MORE
-  // sheet, first show a picker of existing Sale/Purchase bills, then open
-  // the SAME working AddReturnScreen that BillDetailScreen already uses
-  // successfully when you tap "+ SALE RETURN" from inside a bill.
   Future<void> _openReturnFlow(BillType returnType) async {
     final billProvider = context.read<BillProvider>();
     final sourceType = returnType == BillType.saleReturn
@@ -223,6 +246,11 @@ class _BillsScreenState extends State<_BillsScreen>
 
     if (selectedBill == null || !mounted) return;
 
+    final targetTabIndex = returnType == BillType.saleReturn ? 0 : 1;
+    if (_tabs.index != targetTabIndex) {
+      _tabs.animateTo(targetTabIndex);
+    }
+
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -247,8 +275,6 @@ class _BillsScreenState extends State<_BillsScreen>
       builder: (_) => _MoreOptionsSheet(
         onSelected: (type) {
           Navigator.pop(context);
-          // FIX: route returns through the bill-picker flow above instead
-          // of the plain AddBillScreen path.
           _openReturnFlow(type);
         },
       ),
@@ -279,9 +305,10 @@ class _BillsScreenState extends State<_BillsScreen>
     final cashbook = context.watch<CashbookProvider>();
     final auth = context.watch<AuthProvider>();
 
-    final BillType tabType = _currentBillType;
+    final tabTypes = _currentTabBillTypes;
     final allTabBills =
-        billProvider.bills.where((b) => b.billType == tabType).toList();
+        billProvider.bills.where((b) => tabTypes.contains(b.billType)).toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
     final filteredBills = _query.isEmpty
         ? allTabBills
         : allTabBills
@@ -322,6 +349,8 @@ class _BillsScreenState extends State<_BillsScreen>
             monthlyPurchases: billProvider.monthlyPurchases,
             todayIn: todayIn,
             todayOut: todayOut,
+            fromMore: widget.fromMore,
+            onBackToMore: widget.onBackToMore,
             onViewReports: widget.onGoToReports,
             onCashbook: _openCashbook,
             onSettings: () => Navigator.push(
@@ -490,6 +519,8 @@ class _BillsHeader extends StatelessWidget {
   final double monthlyPurchases;
   final double todayIn;
   final double todayOut;
+  final bool fromMore;
+  final VoidCallback? onBackToMore;
   final VoidCallback onViewReports;
   final VoidCallback onCashbook;
   final VoidCallback onSettings;
@@ -501,6 +532,8 @@ class _BillsHeader extends StatelessWidget {
     required this.monthlyPurchases,
     required this.todayIn,
     required this.todayOut,
+    required this.fromMore,
+    this.onBackToMore,
     required this.onViewReports,
     required this.onCashbook,
     required this.onSettings,
@@ -510,12 +543,22 @@ class _BillsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: AppTheme.primaryColor,
-      padding: const EdgeInsets.fromLTRB(14, 46, 14, 12),
+      padding: EdgeInsets.fromLTRB(14, MediaQuery.of(context).padding.top + 8, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              // Back arrow when navigated from More
+              if (fromMore) ...[
+                GestureDetector(
+                  onTap: onBackToMore,
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  ),
+                ),
+              ],
               Container(
                 width: 32,
                 height: 32,
@@ -908,10 +951,7 @@ class _BillTile extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SELECT BILL SHEET (new) — lets the user pick which existing Sale/Purchase
-// bill a return should be created against. This is the missing link that
-// makes "MORE > Sale Return / Purchase Return" actually work, since
-// AddReturnScreen always needs an `originalBill` to copy items/party from.
+// SELECT BILL SHEET
 // ══════════════════════════════════════════════════════════════════════════════
 class _SelectBillSheet extends StatefulWidget {
   final List<Bill> bills;
@@ -1462,11 +1502,6 @@ class BillDetailScreen extends StatelessWidget {
     );
   }
 
-  // FIX: now awaits the result of AddReturnScreen and, when a return was
-  // actually generated (popped with `true`), refreshes BillProvider so
-  // the new return shows up immediately if the user navigates back to the
-  // Bills list — previously this fired-and-forgot the navigation with no
-  // refresh signal at all.
   void _openAddReturn(BuildContext context) async {
     final returnType = bill.billType == BillType.sale
         ? BillType.saleReturn
@@ -3014,7 +3049,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     _themeColor = widget.headerColor;
   }
 
-  // ── Theme picker ──────────────────────────────────────────────────────────
   void _openThemePicker() {
     showModalBottomSheet(
       context: context,
@@ -3031,7 +3065,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     );
   }
 
-  // ── PDF generation ────────────────────────────────────────────────────────
   Future<Uint8List> _generatePdfBytes(dynamic profile) async {
     final pdf = pw.Document();
     final businessName = profile?.businessName ?? 'My Business';
@@ -3040,7 +3073,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     final bill = widget.bill;
     final isPaid = bill.isPaid;
 
-    // Convert Flutter Color to PdfColor
     final pdfColor = PdfColor(
       _themeColor.red / 255,
       _themeColor.green / 255,
@@ -3056,18 +3088,15 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Top bar
               pw.Container(
                 width: double.infinity,
                 height: 6,
                 color: pdfColor,
               ),
               pw.SizedBox(height: 16),
-              // Header row
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // Business logo placeholder
                   pw.Container(
                     width: 40,
                     height: 40,
@@ -3125,7 +3154,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                 ],
               ),
               pw.SizedBox(height: 16),
-              // Bill To + Paid stamp
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
@@ -3204,7 +3232,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                 ],
               ),
               pw.SizedBox(height: 16),
-              // Items table header
               pw.Container(
                 color: PdfColors.grey100,
                 padding: const pw.EdgeInsets.symmetric(
@@ -3247,7 +3274,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                   ],
                 ),
               ),
-              // Items rows
               ...bill.items.asMap().entries.map((e) {
                 final idx = e.key + 1;
                 final item = e.value;
@@ -3298,7 +3324,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                   ),
                 );
               }),
-              // Sub-total
               pw.Container(
                 color: PdfColors.grey100,
                 padding: const pw.EdgeInsets.symmetric(
@@ -3336,7 +3361,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                 ),
               ),
               pw.SizedBox(height: 16),
-              // Total
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.end,
                 children: [
@@ -3391,7 +3415,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                       fontSize: 10,
                       color: PdfColors.grey700)),
               pw.SizedBox(height: 16),
-              // Bottom bar
               pw.Container(
                 width: double.infinity,
                 height: 6,
@@ -3416,14 +3439,12 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     return file;
   }
 
-  // ── Download Invoice ──────────────────────────────────────────────────────
   Future<void> _downloadInvoice(dynamic profile) async {
     if (_isDownloading) return;
     setState(() => _isDownloading = true);
     try {
       final file = await _savePdfToFile(profile);
 
-      // Try to save to Downloads directory (Android)
       File? savedFile;
       if (Platform.isAndroid) {
         try {
@@ -3437,19 +3458,15 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
           savedFile = file;
         }
       } else {
-        // For iOS, use the temp file and open it
         savedFile = file;
       }
 
       if (mounted) {
-        // Open the PDF so user can view/save it
         final result = await OpenFile.open(savedFile?.path ?? file.path);
         if (result.type != ResultType.done && mounted) {
-          // Fallback: share the file
           await Share.shareXFiles(
             [XFile(file.path, mimeType: 'application/pdf')],
-            subject:
-                'Invoice ${widget.bill.billNumber}',
+            subject: 'Invoice ${widget.bill.billNumber}',
           );
         }
 
@@ -3478,19 +3495,16 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     }
   }
 
-  // ── Share on WhatsApp ─────────────────────────────────────────────────────
   Future<void> _shareOnWhatsApp(dynamic profile) async {
     if (_isSharing) return;
     setState(() => _isSharing = true);
     try {
       final file = await _savePdfToFile(profile);
 
-      // Try to open WhatsApp directly with the file
       final whatsappUri = Uri.parse('whatsapp://send');
       final canOpenWhatsApp = await canLaunchUrl(whatsappUri);
 
       if (canOpenWhatsApp) {
-        // Share the PDF file — WhatsApp will be suggested
         await Share.shareXFiles(
           [XFile(file.path, mimeType: 'application/pdf')],
           subject: 'Invoice ${widget.bill.billNumber}',
@@ -3498,7 +3512,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
               'Invoice ${widget.bill.billNumber} - Total: ₹${widget.bill.grandTotal.toStringAsFixed(0)}',
         );
       } else {
-        // WhatsApp not installed, share via general share sheet
         await Share.shareXFiles(
           [XFile(file.path, mimeType: 'application/pdf')],
           subject: 'Invoice ${widget.bill.billNumber}',
@@ -3524,11 +3537,7 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     }
   }
 
-  // ── Navigate to add a new bill ────────────────────────────────────────────
   void _createNew(BuildContext context) {
-    // Pop back to BillPdfScreen, then pop again to BillDetailScreen,
-    // then pop to HomeScreen bills tab — the cleanest UX is to pop
-    // until we reach the route before BillDetailScreen.
     Navigator.of(context).popUntil((route) {
       return route.settings.name == '/' || route.isFirst;
     });
@@ -3564,7 +3573,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
       ),
       body: Column(
         children: [
-          // ── Invoice Preview ───────────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -3572,7 +3580,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
             ),
           ),
 
-          // ── Format selector ───────────────────────────────────────────────
           Container(
             color: const Color(0xFFF5F5F5),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -3605,7 +3612,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
             ),
           ),
 
-          // ── Action buttons ────────────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: EdgeInsets.only(
@@ -3619,14 +3625,12 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // THEME button — opens color picker
                     _ActionIcon(
                       icon: Icons.palette_outlined,
                       label: 'Theme',
                       color: _themeColor,
                       onTap: _openThemePicker,
                     ),
-                    // DOWNLOAD INVOICE button
                     _isDownloading
                         ? _ActionIcon(
                             icon: Icons.hourglass_top,
@@ -3640,7 +3644,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                             color: _themeColor,
                             onTap: () => _downloadInvoice(profile),
                           ),
-                    // SHARE ON WHATSAPP button
                     _isSharing
                         ? _ActionIcon(
                             icon: Icons.hourglass_top,
@@ -3651,7 +3654,7 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                           )
                         : _ActionIcon(
                             icon: Icons.chat_outlined,
-                            label: 'Share on\nWhatsApp',
+                            label: 'Share on\nWhatsapp',
                             color: const Color(0xFF25D366),
                             iconColor: const Color(0xFF25D366),
                             onTap: () => _shareOnWhatsApp(profile),
@@ -3661,7 +3664,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    // CREATE NEW — goes back to bills screen to add new bill
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => _createNew(context),
@@ -3717,7 +3719,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     }
   }
 
-  // ── PREMIUM invoice ───────────────────────────────────────────────────────
   Widget _buildPremiumInvoice(dynamic profile) {
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
@@ -3853,21 +3854,21 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                                   width: 2),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: Column(
+                            child: const Column(
                               children: [
-                                const Text('THANK YOU',
+                                Text('THANK YOU',
                                     style: TextStyle(
                                         fontSize: 8,
                                         color: Color(0xFF2E7D32),
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 1)),
-                                const Text('PAID',
+                                Text('PAID',
                                     style: TextStyle(
                                         fontSize: 18,
                                         color: Color(0xFF2E7D32),
                                         fontWeight: FontWeight.w900,
                                         letterSpacing: 2)),
-                                const Icon(Icons.star,
+                                Icon(Icons.star,
                                     size: 10,
                                     color: Color(0xFF2E7D32)),
                               ],
@@ -4122,7 +4123,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     );
   }
 
-  // ── THERMAL invoice ───────────────────────────────────────────────────────
   Widget _buildThermalInvoice(dynamic profile) {
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
@@ -4293,7 +4293,6 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     );
   }
 
-  // ── BASIC invoice ─────────────────────────────────────────────────────────
   Widget _buildBasicInvoice(dynamic profile) {
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
@@ -4598,54 +4597,26 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
   String _amountInWords(double amount) {
     final int rupees = amount.toInt();
     final ones = [
-      '',
-      'One',
-      'Two',
-      'Three',
-      'Four',
-      'Five',
-      'Six',
-      'Seven',
-      'Eight',
-      'Nine',
-      'Ten',
-      'Eleven',
-      'Twelve',
-      'Thirteen',
-      'Fourteen',
-      'Fifteen',
-      'Sixteen',
-      'Seventeen',
-      'Eighteen',
-      'Nineteen'
+      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight',
+      'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen',
+      'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
     ];
     final tens = [
-      '',
-      '',
-      'Twenty',
-      'Thirty',
-      'Forty',
-      'Fifty',
-      'Sixty',
-      'Seventy',
-      'Eighty',
-      'Ninety'
+      '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy',
+      'Eighty', 'Ninety'
     ];
 
     if (rupees == 0) return 'Zero rupees only';
 
     String words = '';
     if (rupees >= 10000000) {
-      words +=
-          '${_convertHundreds((rupees ~/ 10000000) % 100, ones, tens)} Crore ';
+      words += '${_convertHundreds((rupees ~/ 10000000) % 100, ones, tens)} Crore ';
     }
     if (rupees >= 100000) {
-      words +=
-          '${_convertHundreds((rupees ~/ 100000) % 100, ones, tens)} Lakh ';
+      words += '${_convertHundreds((rupees ~/ 100000) % 100, ones, tens)} Lakh ';
     }
     if (rupees >= 1000) {
-      words +=
-          '${_convertHundreds((rupees ~/ 1000) % 100, ones, tens)} Thousand ';
+      words += '${_convertHundreds((rupees ~/ 1000) % 100, ones, tens)} Thousand ';
     }
     if (rupees >= 100) {
       words += '${ones[(rupees ~/ 100) % 10]} Hundred ';
@@ -4655,8 +4626,7 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     return '${words.trim()} rupees only';
   }
 
-  String _convertHundreds(
-      int n, List<String> ones, List<String> tens) {
+  String _convertHundreds(int n, List<String> ones, List<String> tens) {
     if (n == 0) return '';
     if (n < 20) return ones[n];
     return '${tens[n ~/ 10]}${n % 10 != 0 ? ' ${ones[n % 10]}' : ''}';
@@ -4727,8 +4697,7 @@ class _ThemePickerSheet extends StatelessWidget {
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color:
-                                      color.withValues(alpha: 0.5),
+                                  color: color.withValues(alpha: 0.5),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 )

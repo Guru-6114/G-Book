@@ -1,6 +1,6 @@
 // lib/providers/providers.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// All providers for GBook app
+// All providers for GBook app — MULTI-KHATABOOK support.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
@@ -9,10 +9,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
+import '../utils/helpers.dart';
 
 // ── AuthProvider ──────────────────────────────────────────────────────────────
 class AuthProvider extends ChangeNotifier {
   BusinessProfile? _profile;
+  List<BusinessProfile> _books = [];
   bool _isAuthenticated = false;
   bool _isLoading = false;
   String? _error;
@@ -20,11 +22,29 @@ class AuthProvider extends ChangeNotifier {
   String? _refreshToken;
 
   BusinessProfile? get profile => _profile;
+  List<BusinessProfile> get books => List.unmodifiable(_books);
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
   String? get error => _error;
   BusinessProfile? get user => _profile;
   BusinessProfile? get business => _profile;
+  String get activeBookId => _profile?.id ?? '';
+
+  final List<Future<void> Function(String bookId)> _bookChangeListeners = [];
+
+  void addBookChangeListener(Future<void> Function(String bookId) listener) {
+    _bookChangeListeners.add(listener);
+  }
+
+  Future<void> _notifyBookChangeListeners() async {
+    for (final listener in _bookChangeListeners) {
+      await listener(activeBookId);
+    }
+  }
+
+  Future<void> _loadAllBooks() async {
+    _books = await LocalDatabase.instance.getAllBusinessProfiles();
+  }
 
   Future<bool> checkAuth() async {
     _isLoading = true;
@@ -32,13 +52,14 @@ class AuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
-      if (token != null) {
-        final p = await LocalDatabase.instance.getBusinessProfile();
-        if (p != null) {
-          _profile = p;
-          _isAuthenticated = true;
-          _accessToken = token;
-        }
+      await _loadAllBooks();
+      final p = await LocalDatabase.instance.getBusinessProfile();
+      if (token != null && token.isNotEmpty && p != null) {
+        _profile = p;
+        _isAuthenticated = true;
+        _accessToken = token;
+      } else {
+        _isAuthenticated = false;
       }
     } catch (_) {
       _isAuthenticated = false;
@@ -55,8 +76,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final url = '${AppConstants.baseUrl}/auth/send-otp/';
-      debugPrint('📱 sendOtp → URL: $url');
-      debugPrint('📱 sendOtp → phone: $phone');
+      debugPrint('📱 sendOtp → URL: $url, phone: $phone');
 
       final response = await http.post(
         Uri.parse(url),
@@ -64,36 +84,42 @@ class AuthProvider extends ChangeNotifier {
         body: jsonEncode({'phone': phone}),
       );
 
-      debugPrint('📱 sendOtp ← status: ${response.statusCode}');
-      debugPrint('📱 sendOtp ← body: ${response.body}');
+      debugPrint('📱 sendOtp ← status: ${response.statusCode}, body: ${response.body}');
 
       _isLoading = false;
       notifyListeners();
 
       if (response.statusCode == 200) return true;
 
-      final body = jsonDecode(response.body);
-      _error = body['error'] ?? body['detail'] ?? 'Failed to send OTP';
+      try {
+        final body = jsonDecode(response.body);
+        _error = body['error'] ?? body['detail'] ?? 'Failed to send OTP';
+      } catch (_) {
+        _error = 'Failed to send OTP (${response.statusCode})';
+      }
       notifyListeners();
       return false;
     } catch (e, stack) {
-      debugPrint('📱 sendOtp ✗ exception: $e');
-      debugPrint('📱 sendOtp ✗ stack: $stack');
+      debugPrint('📱 sendOtp ✗ exception: $e\n$stack');
       _isLoading = false;
-      _error = 'Network error: $e';
+      _error = 'Network error: ${e.toString()}';
       notifyListeners();
       return false;
     }
   }
 
+  /// Verifies OTP with the backend.
+  /// Returns true on success. On success, `profile` will be non-null ONLY
+  /// if the user already completed business setup previously.
+  /// Callers should check `auth.profile == null` to decide whether to push
+  /// `ProfileSetupScreen` or `HomeScreen`.
   Future<bool> verifyOtp(String phone, String otp) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
     try {
       final url = '${AppConstants.baseUrl}/auth/verify-otp/';
-      debugPrint('📱 verifyOtp → URL: $url');
-      debugPrint('📱 verifyOtp → phone: $phone, otp: $otp');
+      debugPrint('📱 verifyOtp → URL: $url, phone: $phone');
 
       final response = await http.post(
         Uri.parse(url),
@@ -101,35 +127,63 @@ class AuthProvider extends ChangeNotifier {
         body: jsonEncode({'phone': phone, 'otp': otp}),
       );
 
-      debugPrint('📱 verifyOtp ← status: ${response.statusCode}');
-      debugPrint('📱 verifyOtp ← body: ${response.body}');
+      debugPrint('📱 verifyOtp ← status: ${response.statusCode}, body: ${response.body}');
 
-      final body = jsonDecode(response.body);
       _isLoading = false;
 
       if (response.statusCode == 200) {
-        _accessToken = body['access'];
-        _refreshToken = body['refresh'];
+        Map<String, dynamic> body;
+        try {
+          body = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          _error = 'Invalid server response';
+          notifyListeners();
+          return false;
+        }
+
+        // Save tokens
+        _accessToken = body['access'] as String?;
+        _refreshToken = body['refresh'] as String?;
+
+        if (_accessToken == null || _accessToken!.isEmpty) {
+          _error = 'No access token in response';
+          notifyListeners();
+          return false;
+        }
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', _accessToken!);
-        await prefs.setString('refresh_token', _refreshToken!);
+        if (_refreshToken != null) {
+          await prefs.setString('refresh_token', _refreshToken!);
+        }
+
+        // Check if the user has a saved business profile locally
+        await _loadAllBooks();
         final existing = await LocalDatabase.instance.getBusinessProfile();
         if (existing != null) {
           _profile = existing;
           _isAuthenticated = true;
         }
+        // If no local profile, _profile stays null → caller routes to setup
+
         notifyListeners();
         return true;
       }
 
-      _error = body['error'] ?? body['detail'] ?? 'Invalid OTP';
+      // Non-200 response
+      try {
+        final body = jsonDecode(response.body);
+        _error = body['error'] ?? body['detail'] ?? body['message'] ??
+            'Invalid OTP (${response.statusCode})';
+      } catch (_) {
+        _error = 'Invalid OTP (${response.statusCode})';
+      }
       notifyListeners();
       return false;
     } catch (e, stack) {
-      debugPrint('📱 verifyOtp ✗ exception: $e');
-      debugPrint('📱 verifyOtp ✗ stack: $stack');
+      debugPrint('📱 verifyOtp ✗ exception: $e\n$stack');
       _isLoading = false;
-      _error = 'Network error: $e';
+      _error = 'Network error: ${e.toString()}';
       notifyListeners();
       return false;
     }
@@ -140,7 +194,8 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      await LocalDatabase.instance.saveBusinessProfile(p);
+      await LocalDatabase.instance.saveBusinessProfile(p, makeActive: true);
+      await _loadAllBooks();
       _profile = p;
       _isAuthenticated = true;
     } catch (e) {
@@ -149,6 +204,43 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<BusinessProfile> createNewKhatabook({
+    required String businessName,
+    String? category,
+  }) async {
+    final newProfile = BusinessProfile(
+      id: AppHelpers.generateId(),
+      businessName: businessName,
+      ownerName: _profile?.ownerName ?? '',
+      phone: _profile?.phone ?? '',
+      email: _profile?.email,
+      address: null,
+      gstin: null,
+      category: category ?? _profile?.category,
+      createdAt: DateTime.now(),
+    );
+
+    await LocalDatabase.instance.createBusinessProfile(newProfile);
+    await _loadAllBooks();
+    _profile = newProfile;
+    _isAuthenticated = true;
+    notifyListeners();
+    await _notifyBookChangeListeners();
+    return newProfile;
+  }
+
+  Future<void> switchToBook(String bookId) async {
+    if (bookId == activeBookId) return;
+    await LocalDatabase.instance.setActiveBusinessProfile(bookId);
+    final updated = _books.firstWhere(
+      (b) => b.id == bookId,
+      orElse: () => _profile!,
+    );
+    _profile = updated;
+    notifyListeners();
+    await _notifyBookChangeListeners();
   }
 
   Future<bool> updateProfile(Map<String, dynamic> data) async {
@@ -178,8 +270,11 @@ class AuthProvider extends ChangeNotifier {
         gstin: data['gstin'] as String? ?? _profile!.gstin,
         category: data['category'] as String? ?? _profile!.category,
       );
-      await saveProfile(updated);
-      return _error == null;
+      await LocalDatabase.instance.saveBusinessProfile(updated);
+      await _loadAllBooks();
+      _profile = updated;
+      notifyListeners();
+      return true;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -187,27 +282,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // FIX #9: Logout now properly clears ALL state and calls notifyListeners
-  // so the _RootRedirect widget rebuilds and shows AuthScreen.
   Future<void> logout() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
-      await prefs.remove('refresh_token');
-      await prefs.remove(AppConstants.tokenKey);
-      await prefs.remove(AppConstants.refreshTokenKey);
-    } catch (_) {}
-
-    // Clear all in-memory state
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('refresh_token');
     _profile = null;
+    _books = [];
     _isAuthenticated = false;
     _accessToken = null;
     _refreshToken = null;
     _error = null;
-    _isLoading = false;
-
-    // FIX #9: This notifyListeners triggers _RootRedirect to rebuild,
-    // which will now see isAuthenticated=false and show AuthScreen.
     notifyListeners();
   }
 }
@@ -218,6 +302,7 @@ class CustomerProvider extends ChangeNotifier {
   final Map<String, List<CustomerTransaction>> _txMap = {};
   bool _loading = false;
   String? _error;
+  String _bookId = '';
 
   List<Customer> get customers => List.unmodifiable(_customers);
   bool get loading => _loading;
@@ -234,14 +319,16 @@ class CustomerProvider extends ChangeNotifier {
       .where((c) => c.balance < 0)
       .fold(0.0, (sum, c) => sum + c.balance.abs());
 
-  Future<void> loadCustomers() async {
+  Future<void> loadCustomers({String? bookId}) async {
+    if (bookId != null) _bookId = bookId;
     _loading = true;
     notifyListeners();
     try {
-      final list = await LocalDatabase.instance.getCustomers();
+      final list = await LocalDatabase.instance.getCustomers(_bookId);
       _customers
         ..clear()
         ..addAll(list);
+      _txMap.clear();
       _error = null;
     } catch (e) {
       _error = e.toString();
@@ -252,11 +339,17 @@ class CustomerProvider extends ChangeNotifier {
     }
   }
 
-  Future<List<CustomerTransaction>> getTransactions(
-      String customerId) async {
+  Future<void> reloadForActiveBook(String bookId) async {
+    _customers.clear();
+    _txMap.clear();
+    notifyListeners();
+    await loadCustomers(bookId: bookId);
+  }
+
+  Future<List<CustomerTransaction>> getTransactions(String customerId) async {
     try {
-      final list = await LocalDatabase.instance
-          .getCustomerTransactions(customerId);
+      final list =
+          await LocalDatabase.instance.getCustomerTransactions(customerId);
       _txMap[customerId] = list;
       notifyListeners();
       return list;
@@ -267,8 +360,10 @@ class CustomerProvider extends ChangeNotifier {
   }
 
   Future<void> addCustomer(Customer customer) async {
-    await LocalDatabase.instance.insertCustomer(customer);
-    _customers.add(customer);
+    final withBook =
+        customer.bookId.isEmpty ? customer.copyWith(bookId: _bookId) : customer;
+    await LocalDatabase.instance.insertCustomer(withBook);
+    _customers.add(withBook);
     notifyListeners();
   }
 
@@ -286,24 +381,15 @@ class CustomerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // FIX #5: addTransaction checks for duplicate IDs before inserting
   Future<void> addTransaction(CustomerTransaction tx) async {
-    // Idempotency check — if already in DB/list, skip
-    final existingList = _txMap[tx.customerId] ?? [];
-    if (existingList.any((t) => t.id == tx.id)) {
-      debugPrint('addTransaction: duplicate detected, skipping ${tx.id}');
-      return;
-    }
-
-    await LocalDatabase.instance.insertCustomerTransaction(tx);
-    _txMap.putIfAbsent(tx.customerId, () => []).insert(0, tx);
-
-    final idx = _customers.indexWhere((c) => c.id == tx.customerId);
+    final withBook = tx.bookId.isEmpty ? tx.copyWith(bookId: _bookId) : tx;
+    await LocalDatabase.instance.insertCustomerTransaction(withBook);
+    _txMap.putIfAbsent(withBook.customerId, () => []).insert(0, withBook);
+    final idx = _customers.indexWhere((c) => c.id == withBook.customerId);
     if (idx != -1) {
       final current = _customers[idx];
-      final delta = tx.isGiven ? tx.amount : -tx.amount;
-      _customers[idx] =
-          current.copyWith(balance: current.balance + delta);
+      final delta = withBook.isGiven ? withBook.amount : -withBook.amount;
+      _customers[idx] = current.copyWith(balance: current.balance + delta);
       await LocalDatabase.instance.updateCustomer(_customers[idx]);
     }
     notifyListeners();
@@ -323,15 +409,13 @@ class CustomerProvider extends ChangeNotifier {
       ),
     );
     if (tx.id.isNotEmpty) {
-      await LocalDatabase.instance
-          .deleteCustomerTransaction(transactionId);
+      await LocalDatabase.instance.deleteCustomerTransaction(transactionId);
       _txMap[customerId]?.removeWhere((t) => t.id == transactionId);
       final idx = _customers.indexWhere((c) => c.id == customerId);
       if (idx != -1) {
         final current = _customers[idx];
         final delta = tx.isGiven ? -tx.amount : tx.amount;
-        _customers[idx] =
-            current.copyWith(balance: current.balance + delta);
+        _customers[idx] = current.copyWith(balance: current.balance + delta);
         await LocalDatabase.instance.updateCustomer(_customers[idx]);
       }
       notifyListeners();
@@ -339,37 +423,34 @@ class CustomerProvider extends ChangeNotifier {
   }
 }
 
-// Alias so any screen using CustomersProvider still works
 typedef CustomersProvider = CustomerProvider;
 
-// ── TransactionProvider (App-level cashbook ledger) ───────────────────────────
+// ── TransactionProvider ───────────────────────────────────────────────────────
 class TransactionProvider extends ChangeNotifier {
   final List<AppTransaction> _transactions = [];
   bool _loading = false;
   String? _error;
+  String _bookId = '';
 
   List<AppTransaction> get transactions => List.unmodifiable(_transactions);
   bool get loading => _loading;
   String? get error => _error;
 
-  double get totalIn => _transactions
-      .where((t) => t.isIncome)
-      .fold(0.0, (s, t) => s + t.amount);
-
-  double get totalOut => _transactions
-      .where((t) => !t.isIncome)
-      .fold(0.0, (s, t) => s + t.amount);
-
+  double get totalIn =>
+      _transactions.where((t) => t.isIncome).fold(0.0, (s, t) => s + t.amount);
+  double get totalOut =>
+      _transactions.where((t) => !t.isIncome).fold(0.0, (s, t) => s + t.amount);
   double get balance => totalIn - totalOut;
-
   double get totalGiven => totalOut;
   double get totalReceived => totalIn;
 
-  Future<void> loadTransactions() async {
+  Future<void> loadTransactions({String? bookId}) async {
+    if (bookId != null) _bookId = bookId;
     _loading = true;
     notifyListeners();
     try {
-      final list = await LocalDatabase.instance.getTransactions();
+      final list =
+          await LocalDatabase.instance.getTransactions(bookId: _bookId);
       _transactions
         ..clear()
         ..addAll(list);
@@ -383,13 +464,20 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> reloadForActiveBook(String bookId) async {
+    _transactions.clear();
+    notifyListeners();
+    await loadTransactions(bookId: bookId);
+  }
+
   Future<AppTransaction?> addTransaction(AppTransaction tx) async {
     _error = null;
     try {
-      await LocalDatabase.instance.insertTransaction(tx);
-      _transactions.insert(0, tx);
+      final withBook = tx.bookId.isEmpty ? tx.copyWith(bookId: _bookId) : tx;
+      await LocalDatabase.instance.insertTransaction(withBook);
+      _transactions.insert(0, withBook);
       notifyListeners();
-      return tx;
+      return withBook;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -406,6 +494,7 @@ class TransactionProvider extends ChangeNotifier {
   Future<MonthlyReport?> getMonthlyReport(int year, int month) async {
     try {
       final all = await LocalDatabase.instance.getTransactions(
+        bookId: _bookId,
         from: DateTime(year, month, 1),
         to: DateTime(year, month + 1, 0, 23, 59, 59),
       );
@@ -435,6 +524,7 @@ class TransactionProvider extends ChangeNotifier {
 class SupplierProvider extends ChangeNotifier {
   final List<Supplier> _suppliers = [];
   bool _loading = false;
+  String _bookId = '';
 
   List<Supplier> get suppliers => List.unmodifiable(_suppliers);
   bool get loading => _loading;
@@ -443,11 +533,12 @@ class SupplierProvider extends ChangeNotifier {
       .where((s) => s.balance > 0)
       .fold(0.0, (sum, s) => sum + s.balance);
 
-  Future<void> loadSuppliers() async {
+  Future<void> loadSuppliers({String? bookId}) async {
+    if (bookId != null) _bookId = bookId;
     _loading = true;
     notifyListeners();
     try {
-      final list = await LocalDatabase.instance.getSuppliers();
+      final list = await LocalDatabase.instance.getSuppliers(_bookId);
       _suppliers
         ..clear()
         ..addAll(list);
@@ -459,9 +550,18 @@ class SupplierProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> reloadForActiveBook(String bookId) async {
+    _suppliers.clear();
+    notifyListeners();
+    await loadSuppliers(bookId: bookId);
+  }
+
   Future<void> addSupplier(Supplier supplier) async {
-    await LocalDatabase.instance.insertSupplier(supplier);
-    _suppliers.add(supplier);
+    final withBook = supplier.bookId.isEmpty
+        ? supplier.copyWith(bookId: _bookId)
+        : supplier;
+    await LocalDatabase.instance.insertSupplier(withBook);
+    _suppliers.add(withBook);
     notifyListeners();
   }
 
@@ -485,15 +585,17 @@ typedef SuppliersProvider = SupplierProvider;
 class ItemProvider extends ChangeNotifier {
   final List<Item> _items = [];
   bool _loading = false;
+  String _bookId = '';
 
   List<Item> get items => List.unmodifiable(_items);
   bool get loading => _loading;
 
-  Future<void> loadItems() async {
+  Future<void> loadItems({String? bookId}) async {
+    if (bookId != null) _bookId = bookId;
     _loading = true;
     notifyListeners();
     try {
-      final list = await LocalDatabase.instance.getItems();
+      final list = await LocalDatabase.instance.getItems(_bookId);
       _items
         ..clear()
         ..addAll(list);
@@ -505,9 +607,17 @@ class ItemProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> reloadForActiveBook(String bookId) async {
+    _items.clear();
+    notifyListeners();
+    await loadItems(bookId: bookId);
+  }
+
   Future<void> addItem(Item item) async {
-    await LocalDatabase.instance.insertItem(item);
-    _items.add(item);
+    final withBook =
+        item.bookId.isEmpty ? item.copyWith(bookId: _bookId) : item;
+    await LocalDatabase.instance.insertItem(withBook);
+    _items.add(withBook);
     notifyListeners();
   }
 
@@ -540,6 +650,7 @@ typedef ItemsProvider = ItemProvider;
 class BillProvider extends ChangeNotifier {
   final List<Bill> _bills = [];
   bool _loading = false;
+  String _bookId = '';
 
   List<Bill> get bills => List.unmodifiable(_bills);
   bool get loading => _loading;
@@ -551,32 +662,30 @@ class BillProvider extends ChangeNotifier {
   List<Bill> get expenseBills =>
       _bills.where((b) => b.billType == BillType.expense).toList();
 
-  double get totalSales =>
-      saleBills.fold(0.0, (s, b) => s + b.grandTotal);
+  double get totalSales => saleBills.fold(0.0, (s, b) => s + b.grandTotal);
   double get totalPurchases =>
       purchaseBills.fold(0.0, (s, b) => s + b.grandTotal);
 
   double get monthlySales {
     final now = DateTime.now();
     return saleBills
-        .where(
-            (b) => b.date.month == now.month && b.date.year == now.year)
+        .where((b) => b.date.month == now.month && b.date.year == now.year)
         .fold(0.0, (s, b) => s + b.grandTotal);
   }
 
   double get monthlyPurchases {
     final now = DateTime.now();
     return purchaseBills
-        .where(
-            (b) => b.date.month == now.month && b.date.year == now.year)
+        .where((b) => b.date.month == now.month && b.date.year == now.year)
         .fold(0.0, (s, b) => s + b.grandTotal);
   }
 
-  Future<void> loadBills() async {
+  Future<void> loadBills({String? bookId}) async {
+    if (bookId != null) _bookId = bookId;
     _loading = true;
     notifyListeners();
     try {
-      final list = await LocalDatabase.instance.getBills();
+      final list = await LocalDatabase.instance.getBills(bookId: _bookId);
       _bills
         ..clear()
         ..addAll(list);
@@ -590,9 +699,17 @@ class BillProvider extends ChangeNotifier {
 
   Future<void> loadAll() => loadBills();
 
+  Future<void> reloadForActiveBook(String bookId) async {
+    _bills.clear();
+    notifyListeners();
+    await loadBills(bookId: bookId);
+  }
+
   Future<void> addBill(Bill bill) async {
-    await LocalDatabase.instance.insertBill(bill);
-    _bills.insert(0, bill);
+    final withBook =
+        bill.bookId.isEmpty ? bill.copyWith(bookId: _bookId) : bill;
+    await LocalDatabase.instance.insertBill(withBook);
+    _bills.insert(0, withBook);
     notifyListeners();
   }
 
@@ -605,40 +722,37 @@ class BillProvider extends ChangeNotifier {
   }
 
   Future<int> getNextBillNumber(BillType type) async {
-    return LocalDatabase.instance.getNextBillNumber(type);
+    return LocalDatabase.instance.getNextBillNumber(_bookId, type);
   }
 
   Future<int> nextBillNumber(BillType type) => getNextBillNumber(type);
 }
 
 typedef BillsProvider = BillProvider;
-
-// ── BusinessProfileProvider alias ─────────────────────────────────────────────
 typedef BusinessProfileProvider = AuthProvider;
 
 // ── CashbookProvider ──────────────────────────────────────────────────────────
 class CashbookProvider extends ChangeNotifier {
   final List<CashbookEntry> _entries = [];
   bool _loading = false;
+  String _bookId = '';
 
   List<CashbookEntry> get entries => List.unmodifiable(_entries);
   bool get loading => _loading;
 
-  double get totalIn => _entries
-      .where((e) => e.isCashIn)
-      .fold(0.0, (s, e) => s + e.amount);
-
-  double get totalOut => _entries
-      .where((e) => !e.isCashIn)
-      .fold(0.0, (s, e) => s + e.amount);
-
+  double get totalIn =>
+      _entries.where((e) => e.isCashIn).fold(0.0, (s, e) => s + e.amount);
+  double get totalOut =>
+      _entries.where((e) => !e.isCashIn).fold(0.0, (s, e) => s + e.amount);
   double get balance => totalIn - totalOut;
 
-  Future<void> loadEntries() async {
+  Future<void> loadEntries({String? bookId}) async {
+    if (bookId != null) _bookId = bookId;
     _loading = true;
     notifyListeners();
     try {
-      final list = await LocalDatabase.instance.getCashbookEntries();
+      final list =
+          await LocalDatabase.instance.getCashbookEntries(bookId: _bookId);
       _entries
         ..clear()
         ..addAll(list);
@@ -650,9 +764,17 @@ class CashbookProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> reloadForActiveBook(String bookId) async {
+    _entries.clear();
+    notifyListeners();
+    await loadEntries(bookId: bookId);
+  }
+
   Future<void> addEntry(CashbookEntry entry) async {
-    await LocalDatabase.instance.insertCashbookEntry(entry);
-    _entries.insert(0, entry);
+    final withBook =
+        entry.bookId.isEmpty ? entry.copyWith(bookId: _bookId) : entry;
+    await LocalDatabase.instance.insertCashbookEntry(withBook);
+    _entries.insert(0, withBook);
     notifyListeners();
   }
 

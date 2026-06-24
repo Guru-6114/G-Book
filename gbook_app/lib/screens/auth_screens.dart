@@ -38,7 +38,8 @@ class _AuthScreenState extends State<AuthScreen> {
         MaterialPageRoute(builder: (_) => OtpScreen(phone: phone)),
       );
     } else {
-      AppHelpers.showErrorSnackBar(context, 'Failed to send OTP');
+      AppHelpers.showErrorSnackBar(
+          context, auth.error ?? 'Failed to send OTP');
     }
   }
 
@@ -99,7 +100,6 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Trust badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
@@ -153,10 +153,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Phone input row
                     Row(
                       children: [
-                        // Country code box
                         Container(
                           height: 54,
                           padding:
@@ -170,8 +168,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('🇮🇳',
-                                  style: TextStyle(fontSize: 20)),
+                              Text('🇮🇳', style: TextStyle(fontSize: 20)),
                               SizedBox(width: 6),
                               Text(
                                 '+91',
@@ -205,28 +202,22 @@ class _AuthScreenState extends State<AuthScreen> {
                                   fontSize: 16,
                                   letterSpacing: 0,
                                 ),
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 16),
                                 border: OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(6),
                                   borderSide: const BorderSide(
-                                      color: AppTheme.primaryColor,
-                                      width: 2),
+                                      color: AppTheme.primaryColor, width: 2),
                                 ),
                                 enabledBorder: OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(6),
                                   borderSide: const BorderSide(
                                       color: Color(0xFFBDBDBD)),
                                 ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(6),
                                   borderSide: const BorderSide(
-                                      color: AppTheme.primaryColor,
-                                      width: 2),
+                                      color: AppTheme.primaryColor, width: 2),
                                 ),
                               ),
                               onSubmitted: (_) => _sendOtp(),
@@ -241,7 +232,6 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
             ),
 
-            // GET OTP button + disclaimer
             Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -277,11 +267,10 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 10),
                   const Text.rich(
                     TextSpan(
-                      style: TextStyle(
-                          fontSize: 12, color: Color(0xFF757575)),
+                      style:
+                          TextStyle(fontSize: 12, color: Color(0xFF757575)),
                       children: [
-                        TextSpan(
-                            text: 'By continuing, you agree to our '),
+                        TextSpan(text: 'By continuing, you agree to our '),
                         TextSpan(
                           text: 'Terms and Conditions',
                           style: TextStyle(
@@ -327,6 +316,8 @@ class _OtpScreenState extends State<OtpScreen> {
   bool _loading = false;
   int _countdown = 30;
   bool _canResend = false;
+  // Guard so we only call _verify() once per full OTP entry
+  bool _verifying = false;
 
   @override
   void initState() {
@@ -349,22 +340,27 @@ class _OtpScreenState extends State<OtpScreen> {
   String get _otp => _ctls.map((c) => c.text).join();
 
   Future<void> _verify() async {
-    if (_otp.length != 6) {
+    final otp = _otp;
+    if (otp.length != 6) {
       AppHelpers.showErrorSnackBar(context, 'Please enter the 6-digit OTP');
       return;
     }
+    if (_loading) return; // already in flight
+
     setState(() => _loading = true);
+    _verifying = false; // reset guard after we actually start
+
     final auth = context.read<AuthProvider>();
-    final ok = await auth.verifyOtp(widget.phone, _otp);
+    final ok = await auth.verifyOtp(widget.phone, otp);
     if (!mounted) return;
     setState(() => _loading = false);
+
     if (ok) {
       if (auth.profile == null) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-              builder: (_) =>
-                  ProfileSetupScreen(phone: widget.phone)),
+              builder: (_) => ProfileSetupScreen(phone: widget.phone)),
         );
       } else {
         Navigator.pushAndRemoveUntil(
@@ -374,7 +370,46 @@ class _OtpScreenState extends State<OtpScreen> {
         );
       }
     } else {
-      AppHelpers.showErrorSnackBar(context, 'Invalid OTP. Try again.');
+      // Clear the boxes so user can re-enter cleanly
+      for (final c in _ctls) {
+        c.clear();
+      }
+      _nodes[0].requestFocus();
+      AppHelpers.showErrorSnackBar(
+          context, auth.error ?? 'Invalid OTP. Try again.');
+    }
+  }
+
+  void _onDigitChanged(int index, String value) {
+    if (value.isNotEmpty) {
+      // Move focus forward
+      if (index < 5) {
+        _nodes[index + 1].requestFocus();
+      } else {
+        // Last box filled — unfocus keyboard
+        _nodes[index].unfocus();
+      }
+    } else {
+      // Backspace — move focus back
+      if (index > 0) {
+        _nodes[index - 1].requestFocus();
+      }
+    }
+
+    setState(() {}); // rebuild to update button state
+
+    // Auto-verify only when ALL 6 boxes have exactly one digit,
+    // and we haven't already started a verify call.
+    if (_otp.length == 6 && !_verifying && !_loading) {
+      _verifying = true;
+      // Small delay so the last character renders before we fire the API call
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted && _otp.length == 6 && !_loading) {
+          _verify();
+        } else {
+          _verifying = false;
+        }
+      });
     }
   }
 
@@ -400,8 +435,8 @@ class _OtpScreenState extends State<OtpScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Verify OTP',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
+            style:
+                TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         elevation: 0,
       ),
       body: Padding(
@@ -412,8 +447,13 @@ class _OtpScreenState extends State<OtpScreen> {
             const SizedBox(height: 16),
             Text(
               'OTP sent to +91 ${widget.phone}',
-              style: const TextStyle(
-                  fontSize: 16, color: Color(0xFF424242)),
+              style:
+                  const TextStyle(fontSize: 16, color: Color(0xFF424242)),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Enter the 6-digit code below',
+              style: TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
             ),
             const SizedBox(height: 32),
 
@@ -424,14 +464,14 @@ class _OtpScreenState extends State<OtpScreen> {
                 return SizedBox(
                   width: 46,
                   height: 54,
-                  child: TextFormField(
+                  child: TextField(
                     controller: _ctls[i],
                     focusNode: _nodes[i],
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     maxLength: 1,
                     inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly
+                      FilteringTextInputFormatter.digitsOnly,
                     ],
                     style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.w700),
@@ -445,8 +485,8 @@ class _OtpScreenState extends State<OtpScreen> {
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: const BorderSide(
-                            color: Color(0xFFBDBDBD)),
+                        borderSide:
+                            const BorderSide(color: Color(0xFFBDBDBD)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
@@ -454,15 +494,7 @@ class _OtpScreenState extends State<OtpScreen> {
                             color: AppTheme.primaryColor, width: 2),
                       ),
                     ),
-                    onChanged: (v) {
-                      if (v.isNotEmpty && i < 5) {
-                        _nodes[i + 1].requestFocus();
-                      } else if (v.isEmpty && i > 0) {
-                        _nodes[i - 1].requestFocus();
-                      }
-                      setState(() {});
-                      if (_otp.length == 6) _verify();
-                    },
+                    onChanged: (v) => _onDigitChanged(i, v),
                   ),
                 );
               }),
@@ -487,12 +519,23 @@ class _OtpScreenState extends State<OtpScreen> {
                       setState(() {
                         _canResend = false;
                         _countdown = 30;
+                        _verifying = false;
+                        _loading = false;
                       });
+                      // Clear boxes for fresh entry
+                      for (final c in _ctls) {
+                        c.clear();
+                      }
+                      _nodes[0].requestFocus();
                       _startCountdown();
                       if (!mounted) return;
-                      await context
+                      final sent = await context
                           .read<AuthProvider>()
                           .sendOtp(widget.phone);
+                      if (mounted && !sent) {
+                        AppHelpers.showErrorSnackBar(
+                            context, 'Failed to resend OTP');
+                      }
                     },
                     child: const Text(
                       'RESEND',
@@ -512,9 +555,10 @@ class _OtpScreenState extends State<OtpScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: _loading ? null : _verify,
+                onPressed: (_loading || _otp.length != 6) ? null : _verify,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
+                  disabledBackgroundColor: Colors.grey.shade300,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(6)),
                 ),
@@ -531,6 +575,7 @@ class _OtpScreenState extends State<OtpScreen> {
                       ),
               ),
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -579,12 +624,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       businessName: _businessNameCtrl.text.trim(),
       ownerName: _ownerNameCtrl.text.trim(),
       phone: widget.phone,
-      email: _emailCtrl.text.trim().isEmpty
-          ? null
-          : _emailCtrl.text.trim(),
-      address: _addressCtrl.text.trim().isEmpty
-          ? null
-          : _addressCtrl.text.trim(),
+      email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+      address:
+          _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
       category: _category,
       createdAt: DateTime.now(),
     );
@@ -632,8 +674,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             const SizedBox(height: 8),
             const Text(
               'Tell us about your business',
-              style: TextStyle(
-                  fontSize: 14, color: Color(0xFF757575)),
+              style: TextStyle(fontSize: 14, color: Color(0xFF757575)),
             ),
             const SizedBox(height: 24),
             TextFormField(
@@ -683,8 +724,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 prefixIcon: Icon(Icons.category_outlined),
               ),
               items: _categories
-                  .map((c) =>
-                      DropdownMenuItem(value: c, child: Text(c)))
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
               onChanged: (v) {
                 if (v != null) setState(() => _category = v);
@@ -705,8 +745,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     : const Text(
                         'Save & Continue',
                         style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15),
+                            fontWeight: FontWeight.w700, fontSize: 15),
                       ),
               ),
             ),

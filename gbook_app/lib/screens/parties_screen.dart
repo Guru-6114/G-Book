@@ -1,5 +1,6 @@
 // lib/screens/parties_screen.dart
 import 'package:flutter/material.dart';
+import 'package:gbook_app/services/local_database.dart';
 import '../providers/providers.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
@@ -10,11 +11,15 @@ import 'add_customer_screen.dart';
 import 'add_party_screen.dart';
 import 'customer_screen.dart';
 import 'reports_screen.dart';
-import 'collection_screen.dart';
 import 'profile_screen.dart';
+import 'cashbook_screen.dart';
 
 class PartiesScreen extends StatefulWidget {
-  const PartiesScreen({super.key});
+  final bool fromMore;
+  final VoidCallback onBackToMore;
+
+  const PartiesScreen(
+      {super.key, required this.fromMore, required this.onBackToMore});
 
   @override
   State<PartiesScreen> createState() => _PartiesScreenState();
@@ -34,6 +39,249 @@ class _PartiesScreenState extends State<PartiesScreen>
   void dispose() {
     _tabs.dispose();
     super.dispose();
+  }
+
+  // ── Multi-business switcher (Khatabook style) ─────────────────────────────
+  // FIX #1: Switching between khatabooks now actually switches the active
+  // book (each with its own isolated customers/suppliers/bills/items/
+  // cashbook) instead of just relabeling the same shared data.
+  void _showBusinessSwitcher(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                    child: Row(
+                      children: [
+                        const Text('My Khatabooks',
+                            style: TextStyle(
+                                fontSize: 17, fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  // List every khatabook the user has created
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(ctx).size.height * 0.45,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: auth.books.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 70),
+                      itemBuilder: (_, i) {
+                        final book = auth.books[i];
+                        final isActive = book.id == auth.activeBookId;
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: isActive
+                                ? AppTheme.primaryColor
+                                : AppTheme.primaryColor
+                                    .withValues(alpha: 0.5),
+                            child: Text(
+                              book.businessName.isNotEmpty
+                                  ? book.businessName
+                                      .substring(0, 1)
+                                      .toUpperCase()
+                                  : 'B',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          title: Text(
+                            book.businessName,
+                            style: TextStyle(
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w600),
+                          ),
+                          subtitle: FutureBuilder<int>(
+                            future: _customerCountFor(book.id),
+                            builder: (_, snap) => Text(
+                                '${snap.data ?? 0} Customers'),
+                          ),
+                          trailing: isActive
+                              ? const Icon(Icons.check_circle,
+                                  color: AppTheme.primaryColor)
+                              : null,
+                          onTap: isActive
+                              ? null
+                              : () async {
+                                  Navigator.pop(ctx);
+                                  await auth.switchToBook(book.id);
+                                  if (context.mounted) {
+                                    AppHelpers.showSuccessSnackBar(context,
+                                        'Switched to "${book.businessName}"');
+                                  }
+                                },
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  // Create new khatabook option
+                  ListTile(
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                            color: AppTheme.primaryColor, width: 1.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.add,
+                          color: AppTheme.primaryColor, size: 22),
+                    ),
+                    title: const Text('CREATE NEW KHATABOOK',
+                        style: TextStyle(
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            letterSpacing: 0.5)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showCreateKhatabookSheet(context);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<int> _customerCountFor(String bookId) async {
+    // Lightweight helper just for the switcher list; falls back to the
+    // currently loaded provider count when it's the active book (avoids an
+    // extra DB hit for the common case).
+    final auth = context.read<AuthProvider>();
+    if (bookId == auth.activeBookId) {
+      return context.read<CustomerProvider>().customers.length;
+    }
+    return LocalDatabaseCustomerCount.count(bookId);
+  }
+
+  void _showCreateKhatabookSheet(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Create New Khatabook',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              const Text(
+                  'A new khatabook starts empty — its own customers, suppliers, bills and cashbook.',
+                  style:
+                      TextStyle(fontSize: 13, color: Color(0xFF9E9E9E))),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Business / Khatabook Name',
+                  prefixIcon:
+                      const Icon(Icons.store_outlined, size: 20),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                        color: AppTheme.primaryColor, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () async {
+                    final name = nameCtrl.text.trim();
+                    if (name.isEmpty) return;
+                    Navigator.pop(ctx);
+                    // FIX #1: actually create a brand-new, isolated
+                    // khatabook (own customers/suppliers/bills/items/
+                    // cashbook) instead of renaming the existing one.
+                    await context
+                        .read<AuthProvider>()
+                        .createNewKhatabook(businessName: name);
+                    if (context.mounted) {
+                      AppHelpers.showSuccessSnackBar(
+                          context, 'Khatabook "$name" created!');
+                    }
+                  },
+                  child: const Text('CREATE KHATABOOK',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          letterSpacing: 0.5)),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showEditBusinessSheet(BuildContext context) {
@@ -153,31 +401,44 @@ class _PartiesScreenState extends State<PartiesScreen>
 
   @override
   Widget build(BuildContext context) {
-    // FIX: resizeToAvoidBottomInset: false prevents keyboard from
-    // pushing bottom buttons up and causing overflow
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         automaticallyImplyLeading: false,
-        title: Consumer<AuthProvider>(
-          builder: (_, auth, __) => Text(
-            auth.profile?.businessName ?? 'My Business',
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 17),
+        leading: widget.fromMore
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: widget.onBackToMore,
+              )
+            : null,
+        title: GestureDetector(
+          onTap: () => _showBusinessSwitcher(context),
+          child: Consumer<AuthProvider>(
+            builder: (_, auth, __) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    auth.profile?.businessName ?? 'My Business',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 17),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.keyboard_arrow_down,
+                    color: Colors.white, size: 20),
+              ],
+            ),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined,
-                color: Colors.white, size: 20),
-            tooltip: 'Edit Business',
-            onPressed: () => _showEditBusinessSheet(context),
-          ),
-        ],
+        // FIX #2: pencil/edit icon removed from the app bar actions.
+        // Editing the business name is still reachable via the khatabook
+        // switcher sheet (tap the title) -> business name shown there.
         bottom: TabBar(
           controller: _tabs,
           indicatorColor: Colors.white,
@@ -223,6 +484,13 @@ class _CustomersTabState extends State<_CustomersTab> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _openCashbook() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CashbookScreen()),
+    );
   }
 
   @override
@@ -276,72 +544,64 @@ class _CustomersTabState extends State<_CustomersTab> {
                 ],
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _OutlineButton(
-                      icon: Icons.picture_as_pdf_outlined,
-                      label: 'View Reports',
-                      color: const Color(0xFF1565C0),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ReportsScreen()),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _OutlineButton(
-                      icon: Icons.calendar_month_outlined,
-                      label: 'Collection',
-                      color: const Color(0xFF2E7D32),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const CollectionScreen()),
-                      ),
-                    ),
-                  ),
-                ],
+              // Only View Reports button (no Collection)
+              _OutlineButton(
+                icon: Icons.picture_as_pdf_outlined,
+                label: 'View Reports',
+                color: const Color(0xFF1565C0),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ReportsScreen()),
+                ),
               ),
             ],
           ),
         ),
 
-        // Search + filter chips
+        // Search + Cashbook button row (FIX #2: replaces the old pencil
+        // icon flow — Cashbook now sits right next to the search field,
+        // matching the reference Khatabook layout) + filter chips
         Container(
           color: Colors.white,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Column(
             children: [
-              TextField(
-                controller: _searchCtrl,
-                decoration: InputDecoration(
-                  hintText: 'Search customers...',
-                  hintStyle: const TextStyle(
-                      fontSize: 13, color: Color(0xFFBDBDBD)),
-                  prefixIcon: const Icon(Icons.search,
-                      size: 20, color: Color(0xFF9E9E9E)),
-                  suffixIcon: _query.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            setState(() => _query = '');
-                          })
-                      : null,
-                  isDense: true,
-                  filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Search Customer',
+                        hintStyle: const TextStyle(
+                            fontSize: 13, color: Color(0xFFBDBDBD)),
+                        prefixIcon: const Icon(Icons.search,
+                            size: 20, color: Color(0xFF9E9E9E)),
+                        suffixIcon: _query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _query = '');
+                                })
+                            : null,
+                        isDense: true,
+                        filled: true,
+                        fillColor: const Color(0xFFF5F5F5),
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (v) => setState(() => _query = v),
+                    ),
                   ),
-                ),
-                onChanged: (v) => setState(() => _query = v),
+                  const SizedBox(width: 8),
+                  _CashbookButton(onTap: _openCashbook),
+                ],
               ),
               const SizedBox(height: 8),
               Row(
@@ -376,8 +636,6 @@ class _CustomersTabState extends State<_CustomersTab> {
 
         const Divider(height: 1),
 
-        // FIX: Expanded so list fills space; bottom ADD CUSTOMER is
-        // inside Column so keyboard doesn't push it (resizeToAvoidBottomInset: false)
         Expanded(
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
@@ -404,6 +662,43 @@ class _CustomersTabState extends State<_CustomersTab> {
                       ),
                     ),
         ),
+
+        // ── Khatabook-style bottom ADD CUSTOMER bar ────────────────────────
+        Container(
+          color: Colors.white,
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            bottom: MediaQuery.of(context).padding.bottom + 10,
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.arrow_forward,
+                  color: Color(0xFF1565C0), size: 22),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AddCustomerScreen()),
+                ),
+                icon: const Icon(Icons.person_add, size: 18),
+                label: const Text('ADD CUSTOMER',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -425,6 +720,13 @@ class _SuppliersTabState extends State<_SuppliersTab> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _openCashbook() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CashbookScreen()),
+    );
   }
 
   @override
@@ -478,6 +780,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                 ],
               ),
               const SizedBox(height: 10),
+              // Only View Reports (no collection)
               _OutlineButton(
                 icon: Icons.picture_as_pdf_outlined,
                 label: 'View Reports',
@@ -492,40 +795,47 @@ class _SuppliersTabState extends State<_SuppliersTab> {
           ),
         ),
 
-        // Search
+        // Search + Cashbook button row (same layout as Customers tab)
         Container(
           color: Colors.white,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: 'Search suppliers...',
-              prefixIcon: const Icon(Icons.search,
-                  size: 20, color: Color(0xFF9E9E9E)),
-              suffixIcon: _query.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _query = '');
-                      })
-                  : null,
-              isDense: true,
-              filled: true,
-              fillColor: const Color(0xFFF5F5F5),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Search Supplier',
+                    prefixIcon: const Icon(Icons.search,
+                        size: 20, color: Color(0xFF9E9E9E)),
+                    suffixIcon: _query.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _query = '');
+                            })
+                        : null,
+                    isDense: true,
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (v) => setState(() => _query = v),
+                ),
               ),
-            ),
-            onChanged: (v) => setState(() => _query = v),
+              const SizedBox(width: 8),
+              _CashbookButton(onTap: _openCashbook),
+            ],
           ),
         ),
         const Divider(height: 1),
 
-        // FIX: Expanded wraps the list to prevent overflow
         Expanded(
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
@@ -552,7 +862,84 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                       ),
                     ),
         ),
+
+        // ── Khatabook-style bottom ADD SUPPLIER bar ────────────────────────
+        Container(
+          color: Colors.white,
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            bottom: MediaQuery.of(context).padding.bottom + 10,
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.arrow_forward,
+                  color: Color(0xFF1565C0), size: 22),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          const AddPartyScreen(isSupplier: true)),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('ADD SUPPLIER',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+// ── Cashbook quick-access button (next to search bar) ────────────────────────
+class _CashbookButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CashbookButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.primaryColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.menu_book_outlined,
+                size: 18, color: AppTheme.primaryColor),
+            const SizedBox(width: 6),
+            const Text(
+              'Cashbook',
+              style: TextStyle(
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -650,9 +1037,7 @@ class _SupplierTile extends StatelessWidget {
               const Text('Settled',
                   style: TextStyle(
                       fontSize: 12, color: Color(0xFF9E9E9E))),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right,
-                color: Color(0xFFBDBDBD), size: 18),
+            // FIX #3: trailing chevron arrow removed.
           ],
         ),
       ),
@@ -803,7 +1188,6 @@ class _SupplierScreenState extends State<SupplierScreen> {
     final dateKeys = grouped.keys.toList();
 
     return Scaffold(
-      // FIX: false so bottom buttons don't get pushed by keyboard
       resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF0F0F0),
       appBar: AppBar(
@@ -924,7 +1308,6 @@ class _SupplierScreenState extends State<SupplierScreen> {
             ),
           ),
 
-          // FIX: Expanded so list fills remaining space without overflow
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -1019,7 +1402,6 @@ class _SupplierScreenState extends State<SupplierScreen> {
                         ),
                       ),
           ),
-          // FIX: Bottom bar inside Column so keyboard doesn't push it up
           Container(
             color: Colors.white,
             padding: EdgeInsets.only(
@@ -1535,9 +1917,7 @@ class _CustomerTile extends StatelessWidget {
               const Text('Settled',
                   style: TextStyle(
                       fontSize: 12, color: Color(0xFF9E9E9E))),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right,
-                color: Color(0xFFBDBDBD), size: 18),
+            // FIX #3: trailing chevron arrow removed.
           ],
         ),
       ),
@@ -1552,84 +1932,43 @@ class _CustomerEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: Center(
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 180,
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 180,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.people_alt_outlined,
-                          size: 60, color: Colors.grey.shade400),
-                      const SizedBox(height: 8),
-                      Text('Collect payments faster',
-                          style: TextStyle(
-                              color: Colors.grey.shade500, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(
-                    'Add customers & maintain your Khata',
+                Icon(Icons.people_alt_outlined,
+                    size: 60, color: Colors.grey.shade400),
+                const SizedBox(height: 8),
+                Text('Collect payments faster',
                     style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF424242)),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+                        color: Colors.grey.shade500, fontSize: 12)),
               ],
             ),
           ),
-        ),
-        // FIX: bottom bar inside Column, not in SafeArea bottomNavigationBar
-        Container(
-          color: Colors.white,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(context).padding.bottom + 12,
+          const SizedBox(height: 20),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Add customers & maintain your Khata',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF424242)),
+              textAlign: TextAlign.center,
+            ),
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_forward,
-                    color: Color(0xFF1565C0)),
-                onPressed: () {},
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: onAddCustomer,
-                icon: const Icon(Icons.person_add, size: 18),
-                label: const Text('ADD CUSTOMER',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accentRed,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1640,70 +1979,37 @@ class _SupplierEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.local_shipping_outlined,
-                      size: 36,
-                      color:
-                          AppTheme.primaryColor.withValues(alpha: 0.5)),
-                ),
-                const SizedBox(height: 16),
-                const Text('No suppliers yet',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF424242))),
-                const SizedBox(height: 8),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 40),
-                  child: Text('Add your suppliers to track payables',
-                      style: TextStyle(
-                          fontSize: 13, color: Color(0xFF9E9E9E)),
-                      textAlign: TextAlign.center),
-                ),
-              ],
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
             ),
+            child: Icon(Icons.local_shipping_outlined,
+                size: 36,
+                color: AppTheme.primaryColor.withValues(alpha: 0.5)),
           ),
-        ),
-        Container(
-          color: Colors.white,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 12,
-            bottom: MediaQuery.of(context).padding.bottom + 12,
+          const SizedBox(height: 16),
+          const Text('No suppliers yet',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF424242))),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 40),
+            child: Text('Add your suppliers to track payables',
+                style: TextStyle(
+                    fontSize: 13, color: Color(0xFF9E9E9E)),
+                textAlign: TextAlign.center),
           ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onAddSupplier,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('ADD SUPPLIER',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24)),
-              ),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

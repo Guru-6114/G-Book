@@ -1,9 +1,8 @@
 // lib/models/models.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// All data models for GBook app
+// All data models for GBook app — multi-book support
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── PaymentStatus ─────────────────────────────────────────────────────────────
 class PaymentStatus {
   static const String paid = 'paid';
   static const String unpaid = 'unpaid';
@@ -12,7 +11,6 @@ class PaymentStatus {
   static const String partiallyPaid = 'partial';
 }
 
-// ── TransactionType ───────────────────────────────────────────────────────────
 class TransactionType {
   static const String credit = 'credit';
   static const String debit = 'debit';
@@ -31,6 +29,7 @@ class BusinessProfile {
   final String? gstin;
   final String? category;
   final DateTime createdAt;
+  final bool isActive;
 
   const BusinessProfile({
     required this.id,
@@ -42,9 +41,9 @@ class BusinessProfile {
     this.gstin,
     this.category,
     required this.createdAt,
+    this.isActive = false,
   });
 
-  // Convenience getters used by profile_screen
   String get name => ownerName;
 
   BusinessProfile copyWith({
@@ -57,6 +56,7 @@ class BusinessProfile {
     String? gstin,
     String? category,
     DateTime? createdAt,
+    bool? isActive,
   }) {
     return BusinessProfile(
       id: id ?? this.id,
@@ -68,6 +68,7 @@ class BusinessProfile {
       gstin: gstin ?? this.gstin,
       category: category ?? this.category,
       createdAt: createdAt ?? this.createdAt,
+      isActive: isActive ?? this.isActive,
     );
   }
 
@@ -82,6 +83,7 @@ class BusinessProfile {
       'gstin': gstin,
       'category': category,
       'createdAt': createdAt.toIso8601String(),
+      'isActive': isActive ? 1 : 0,
     };
   }
 
@@ -98,6 +100,7 @@ class BusinessProfile {
       gstin: map['gstin'] as String?,
       category: map['category'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      isActive: ((map['isActive'] as int?) ?? 0) == 1,
     );
   }
 
@@ -114,6 +117,7 @@ class Customer {
   final String? address;
   final double balance;
   final DateTime createdAt;
+  final String bookId;
 
   const Customer({
     required this.id,
@@ -123,6 +127,7 @@ class Customer {
     this.address,
     this.balance = 0.0,
     required this.createdAt,
+    this.bookId = '',
   });
 
   Customer copyWith({
@@ -133,6 +138,7 @@ class Customer {
     String? address,
     double? balance,
     DateTime? createdAt,
+    String? bookId,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -142,6 +148,7 @@ class Customer {
       address: address ?? this.address,
       balance: balance ?? this.balance,
       createdAt: createdAt ?? this.createdAt,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -154,6 +161,7 @@ class Customer {
       'address': address,
       'balance': balance,
       'createdAt': createdAt.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -168,6 +176,7 @@ class Customer {
       address: map['address'] as String?,
       balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 
@@ -184,6 +193,7 @@ class CustomerTransaction {
   final String? note;
   final String paymentMode;
   final DateTime date;
+  final String bookId;
 
   const CustomerTransaction({
     required this.id,
@@ -193,6 +203,7 @@ class CustomerTransaction {
     this.note,
     this.paymentMode = 'cash',
     required this.date,
+    this.bookId = '',
   });
 
   CustomerTransaction copyWith({
@@ -203,6 +214,7 @@ class CustomerTransaction {
     String? note,
     String? paymentMode,
     DateTime? date,
+    String? bookId,
   }) {
     return CustomerTransaction(
       id: id ?? this.id,
@@ -212,6 +224,7 @@ class CustomerTransaction {
       note: note ?? this.note,
       paymentMode: paymentMode ?? this.paymentMode,
       date: date ?? this.date,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -224,6 +237,7 @@ class CustomerTransaction {
       'note': note,
       'paymentMode': paymentMode,
       'date': date.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -238,6 +252,7 @@ class CustomerTransaction {
       note: map['note'] as String?,
       paymentMode: (map['paymentMode'] as String?) ?? 'cash',
       date: DateTime.parse(map['date'] as String),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 
@@ -245,7 +260,7 @@ class CustomerTransaction {
       CustomerTransaction.fromMap(json);
 }
 
-// ── AppTransaction (cashbook / ledger) ────────────────────────────────────────
+// ── AppTransaction ────────────────────────────────────────────────────────────
 class AppTransaction {
   final String id;
   final double amount;
@@ -254,12 +269,11 @@ class AppTransaction {
   final String? note;
   final String paymentMode;
   final DateTime date;
-
-  // Optional fields used by add_transaction_screen & reports_screen
   final String? customerId;
   final String? description;
   final String? referenceNumber;
-  final String type; // 'credit' | 'debit' | 'income' | 'expense'
+  final String type;
+  final String bookId;
 
   const AppTransaction({
     required this.id,
@@ -273,6 +287,7 @@ class AppTransaction {
     this.description,
     this.referenceNumber,
     String? type,
+    this.bookId = '',
   }) : type = type ?? (isIncome ? TransactionType.credit : TransactionType.debit);
 
   AppTransaction copyWith({
@@ -287,6 +302,7 @@ class AppTransaction {
     String? description,
     String? referenceNumber,
     String? type,
+    String? bookId,
   }) {
     return AppTransaction(
       id: id ?? this.id,
@@ -300,6 +316,7 @@ class AppTransaction {
       description: description ?? this.description,
       referenceNumber: referenceNumber ?? this.referenceNumber,
       type: type ?? this.type,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -312,6 +329,7 @@ class AppTransaction {
       'note': note,
       'paymentMode': paymentMode,
       'date': date.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -327,6 +345,7 @@ class AppTransaction {
         'description': description,
         'referenceNumber': referenceNumber,
         'type': type,
+        'bookId': bookId,
       };
 
   factory AppTransaction.fromMap(Map<String, dynamic> map) {
@@ -346,6 +365,7 @@ class AppTransaction {
       referenceNumber: map['referenceNumber'] as String?,
       type: (map['type'] as String?) ??
           (isIncome ? TransactionType.credit : TransactionType.debit),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 
@@ -361,6 +381,7 @@ class CashbookEntry {
   final String? description;
   final String paymentMode;
   final DateTime date;
+  final String bookId;
 
   const CashbookEntry({
     required this.id,
@@ -369,6 +390,7 @@ class CashbookEntry {
     this.description,
     this.paymentMode = 'cash',
     required this.date,
+    this.bookId = '',
   });
 
   CashbookEntry copyWith({
@@ -378,6 +400,7 @@ class CashbookEntry {
     String? description,
     String? paymentMode,
     DateTime? date,
+    String? bookId,
   }) {
     return CashbookEntry(
       id: id ?? this.id,
@@ -386,6 +409,7 @@ class CashbookEntry {
       description: description ?? this.description,
       paymentMode: paymentMode ?? this.paymentMode,
       date: date ?? this.date,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -397,6 +421,7 @@ class CashbookEntry {
       'description': description,
       'paymentMode': paymentMode,
       'date': date.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -408,6 +433,7 @@ class CashbookEntry {
       description: map['description'] as String?,
       paymentMode: (map['paymentMode'] as String?) ?? 'cash',
       date: DateTime.parse(map['date'] as String),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 }
@@ -422,6 +448,7 @@ class Supplier {
   final String? gstin;
   final double balance;
   final DateTime createdAt;
+  final String bookId;
 
   const Supplier({
     required this.id,
@@ -432,6 +459,7 @@ class Supplier {
     this.gstin,
     this.balance = 0.0,
     required this.createdAt,
+    this.bookId = '',
   });
 
   Supplier copyWith({
@@ -443,6 +471,7 @@ class Supplier {
     String? gstin,
     double? balance,
     DateTime? createdAt,
+    String? bookId,
   }) {
     return Supplier(
       id: id ?? this.id,
@@ -453,6 +482,7 @@ class Supplier {
       gstin: gstin ?? this.gstin,
       balance: balance ?? this.balance,
       createdAt: createdAt ?? this.createdAt,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -466,6 +496,7 @@ class Supplier {
       'gstin': gstin,
       'balance': balance,
       'createdAt': createdAt.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -481,6 +512,7 @@ class Supplier {
       gstin: map['gstin'] as String?,
       balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 
@@ -501,6 +533,7 @@ class Item {
   final String? category;
   final String? description;
   final DateTime createdAt;
+  final String bookId;
 
   const Item({
     required this.id,
@@ -512,6 +545,7 @@ class Item {
     this.category,
     this.description,
     required this.createdAt,
+    this.bookId = '',
   });
 
   Item copyWith({
@@ -524,6 +558,7 @@ class Item {
     String? category,
     String? description,
     DateTime? createdAt,
+    String? bookId,
   }) {
     return Item(
       id: id ?? this.id,
@@ -535,6 +570,7 @@ class Item {
       category: category ?? this.category,
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -549,6 +585,7 @@ class Item {
       'category': category,
       'description': description,
       'createdAt': createdAt.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -568,6 +605,7 @@ class Item {
       category: map['category'] as String?,
       description: map['description'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 
@@ -676,6 +714,7 @@ class Bill {
   final String? notes;
   final DateTime date;
   final DateTime createdAt;
+  final String bookId;
 
   const Bill({
     required this.id,
@@ -693,15 +732,13 @@ class Bill {
     this.notes,
     required this.date,
     required this.createdAt,
+    this.bookId = '',
   });
 
   double get balanceDue => grandTotal - paidAmount;
   bool get isPaid => balanceDue <= 0;
-
-  // Alias used by bill_screen
   double get totalAmount => grandTotal;
 
-  // Payment status string used by bill_screen
   String get paymentStatus {
     if (isPaid) return PaymentStatus.paid;
     if (paidAmount > 0) return PaymentStatus.partial;
@@ -724,6 +761,7 @@ class Bill {
     String? notes,
     DateTime? date,
     DateTime? createdAt,
+    String? bookId,
   }) {
     return Bill(
       id: id ?? this.id,
@@ -741,6 +779,7 @@ class Bill {
       notes: notes ?? this.notes,
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,
+      bookId: bookId ?? this.bookId,
     );
   }
 
@@ -760,6 +799,7 @@ class Bill {
       'notes': notes,
       'date': date.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
+      'bookId': bookId,
     };
   }
 
@@ -788,11 +828,11 @@ class Bill {
       notes: map['notes'] as String?,
       date: DateTime.parse(map['date'] as String),
       createdAt: DateTime.parse(map['createdAt'] as String),
+      bookId: (map['bookId'] as String?) ?? '',
     );
   }
 
-  factory Bill.fromJson(Map<String, dynamic> json) =>
-      Bill.fromMap(json, []);
+  factory Bill.fromJson(Map<String, dynamic> json) => Bill.fromMap(json, []);
 }
 
 // ── MonthlyReport ─────────────────────────────────────────────────────────────

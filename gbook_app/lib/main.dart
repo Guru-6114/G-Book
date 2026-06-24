@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/providers.dart';
@@ -8,24 +7,30 @@ import 'screens/splash_screen.dart';
 import 'screens/customer_screen.dart';
 import 'models/models.dart';
 import 'theme/app_theme.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'firebase_options.dart';
-import 'services/notification_service.dart';
 
-void main() async {
+// ── BLOCK A: No Firebase yet (use this until flutterfire configure is done) ───
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-  await NotificationService().initialize();
-
   runApp(const GBookApp());
 }
+
+// ── BLOCK B: With Firebase — uncomment AFTER running:
+//   flutter pub get
+//   flutterfire configure
+// Then delete Block A above and uncomment everything below.
+//
+// import 'package:firebase_core/firebase_core.dart';
+// import 'firebase_options.dart';
+// import 'services/fcm_service.dart';
+//
+// void main() async {
+//   WidgetsFlutterBinding.ensureInitialized();
+//   await Firebase.initializeApp(
+//     options: DefaultFirebaseOptions.currentPlatform,
+//   );
+//   await FcmService().initialize();
+//   runApp(const GBookApp());
+// }
 
 class GBookApp extends StatelessWidget {
   const GBookApp({super.key});
@@ -35,32 +40,71 @@ class GBookApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(
-            create: (_) => CustomerProvider()..loadCustomers()),
-        ChangeNotifierProvider(
-            create: (_) => TransactionProvider()..loadTransactions()),
-        ChangeNotifierProvider(
-            create: (_) => SupplierProvider()..loadSuppliers()),
-        ChangeNotifierProvider(create: (_) => ItemProvider()..loadItems()),
-        ChangeNotifierProvider(create: (_) => BillProvider()..loadBills()),
-        ChangeNotifierProvider(
-            create: (_) => CashbookProvider()..loadEntries()),
+        ChangeNotifierProvider(create: (_) => CustomerProvider()),
+        ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProvider(create: (_) => SupplierProvider()),
+        ChangeNotifierProvider(create: (_) => ItemProvider()),
+        ChangeNotifierProvider(create: (_) => BillProvider()),
+        ChangeNotifierProvider(create: (_) => CashbookProvider()),
       ],
-      child: MaterialApp(
-        title: 'GBook',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        home: const _RootRedirect(),
-        onGenerateRoute: (settings) {
-          if (settings.name == '/customer') {
-            final customer = settings.arguments as Customer;
-            return MaterialPageRoute(
-              builder: (_) => CustomerScreen(customer: customer),
-            );
-          }
-          return null;
-        },
-      ),
+      child: const _AppBootstrap(),
+    );
+  }
+}
+
+/// Wires up the active-khatabook-change listeners once, then shows the root
+/// of the app. This is what makes "Create New Khatabook" actually isolate
+/// data per book instead of sharing customers/suppliers/bills across books.
+class _AppBootstrap extends StatefulWidget {
+  const _AppBootstrap();
+
+  @override
+  State<_AppBootstrap> createState() => _AppBootstrapState();
+}
+
+class _AppBootstrapState extends State<_AppBootstrap> {
+  bool _wired = false;
+
+  void _wireBookChangeListeners(BuildContext context) {
+    if (_wired) return;
+    _wired = true;
+    final auth = context.read<AuthProvider>();
+    final customerProvider = context.read<CustomerProvider>();
+    final transactionProvider = context.read<TransactionProvider>();
+    final supplierProvider = context.read<SupplierProvider>();
+    final itemProvider = context.read<ItemProvider>();
+    final billProvider = context.read<BillProvider>();
+    final cashbookProvider = context.read<CashbookProvider>();
+
+    auth.addBookChangeListener((bookId) async {
+      await Future.wait([
+        customerProvider.reloadForActiveBook(bookId),
+        transactionProvider.reloadForActiveBook(bookId),
+        supplierProvider.reloadForActiveBook(bookId),
+        itemProvider.reloadForActiveBook(bookId),
+        billProvider.reloadForActiveBook(bookId),
+        cashbookProvider.reloadForActiveBook(bookId),
+      ]);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _wireBookChangeListeners(context);
+    return MaterialApp(
+      title: 'GBook',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      home: const _RootRedirect(),
+      onGenerateRoute: (settings) {
+        if (settings.name == '/customer') {
+          final customer = settings.arguments as Customer;
+          return MaterialPageRoute(
+            builder: (_) => CustomerScreen(customer: customer),
+          );
+        }
+        return null;
+      },
     );
   }
 }
@@ -74,47 +118,43 @@ class _RootRedirect extends StatefulWidget {
 
 class _RootRedirectState extends State<_RootRedirect> {
   bool _splashDone = false;
+  bool _isLoggedIn = false;
+  bool _dataLoadedForActiveBook = false;
 
-  // FIX (logout bug): the old code also kept a local `_isLoggedIn` bool
-  // that was set to `true` by the splash screen's onComplete callback and
-  // NEVER reset afterwards. AuthProvider.logout() correctly clears
-  // auth.isAuthenticated, but the redirect logic used to check
-  // `auth.isAuthenticated || _isLoggedIn` — so even after a real logout,
-  // the stale `_isLoggedIn == true` kept sending the user straight back to
-  // HomeScreen instead of AuthScreen. That's why tapping Logout looked
-  // like it did nothing.
-  //
-  // Fix: drop the redundant local flag entirely and trust AuthProvider as
-  // the single source of truth for auth state. We still use
-  // onSplashComplete to know the splash animation/timer has finished and
-  // checkAuth() has had a chance to run, but it no longer overrides
-  // AuthProvider's verdict.
-  Future<void> onSplashComplete(bool isLoggedIn) async {
-    // Make sure AuthProvider has actually loaded any persisted session
-    // before we decide where to navigate. checkAuth() reads the saved
-    // token/profile from storage and sets isAuthenticated accordingly.
+  void onSplashComplete(bool isLoggedIn) {
     if (!mounted) return;
-    await context.read<AuthProvider>().checkAuth();
-    if (!mounted) return;
-    setState(() => _splashDone = true);
+    setState(() {
+      _splashDone = true;
+      _isLoggedIn = isLoggedIn;
+    });
+  }
+
+  Future<void> _loadDataForActiveBook(String bookId) async {
+    if (_dataLoadedForActiveBook || bookId.isEmpty) return;
+    _dataLoadedForActiveBook = true;
+    await Future.wait([
+      context.read<CustomerProvider>().loadCustomers(bookId: bookId),
+      context.read<TransactionProvider>().loadTransactions(bookId: bookId),
+      context.read<SupplierProvider>().loadSuppliers(bookId: bookId),
+      context.read<ItemProvider>().loadItems(bookId: bookId),
+      context.read<BillProvider>().loadBills(bookId: bookId),
+      context.read<CashbookProvider>().loadEntries(bookId: bookId),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    if (!_splashDone) {
-      return SplashScreen(onComplete: onSplashComplete);
-    }
-
-    // FIX: this now purely reflects AuthProvider's real state. When
-    // logout() runs, it sets isAuthenticated = false and calls
-    // notifyListeners(), which rebuilds this widget and correctly routes
-    // to AuthScreen — requiring OTP again, exactly like Khatabook.
-    if (auth.isAuthenticated) {
+    if (_splashDone && (auth.isAuthenticated || _isLoggedIn) &&
+        auth.activeBookId.isNotEmpty) {
+      // Kick off data load for whichever book is active, scoped correctly.
+      _loadDataForActiveBook(auth.activeBookId);
       return const HomeScreen();
     }
-
-    return const AuthScreen();
+    if (_splashDone) {
+      return const AuthScreen();
+    }
+    return SplashScreen(onComplete: onSplashComplete);
   }
 }
