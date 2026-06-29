@@ -1,6 +1,5 @@
 // lib/screens/parties_screen.dart
 import 'package:flutter/material.dart';
-import 'package:gbook_app/services/local_database.dart';
 import '../providers/providers.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
@@ -13,6 +12,8 @@ import 'customer_screen.dart';
 import 'reports_screen.dart';
 import 'profile_screen.dart';
 import 'cashbook_screen.dart';
+import '../services/pdf_service.dart';
+import '../services/local_database.dart';
 
 class PartiesScreen extends StatefulWidget {
   final bool fromMore;
@@ -41,12 +42,21 @@ class _PartiesScreenState extends State<PartiesScreen>
     super.dispose();
   }
 
-  // ── Multi-business switcher (Khatabook style) ─────────────────────────────
-  // FIX #1: Switching between khatabooks now actually switches the active
-  // book (each with its own isolated customers/suppliers/bills/items/
-  // cashbook) instead of just relabeling the same shared data.
-  void _showBusinessSwitcher(BuildContext context) {
+  // ── Khatabook switcher sheet ─────────────────────────────────────────────
+  void _showKhatabookSwitcher(BuildContext context) async {
     final auth = context.read<AuthProvider>();
+    final allBooks = await LocalDatabase.instance.getAllBusinessProfiles();
+
+    if (!context.mounted) return;
+
+    // Count customers per book
+    final counts = <String, int>{};
+    for (final b in allBooks) {
+      counts[b.id] = await LocalDatabaseCustomerCount.count(b.id);
+    }
+
+    if (!context.mounted) return;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -54,140 +64,40 @@ class _PartiesScreenState extends State<PartiesScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                    child: Row(
-                      children: [
-                        const Text('My Khatabooks',
-                            style: TextStyle(
-                                fontSize: 17, fontWeight: FontWeight.w700)),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(ctx),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  // List every khatabook the user has created
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.of(ctx).size.height * 0.45,
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: auth.books.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 70),
-                      itemBuilder: (_, i) {
-                        final book = auth.books[i];
-                        final isActive = book.id == auth.activeBookId;
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: isActive
-                                ? AppTheme.primaryColor
-                                : AppTheme.primaryColor
-                                    .withValues(alpha: 0.5),
-                            child: Text(
-                              book.businessName.isNotEmpty
-                                  ? book.businessName
-                                      .substring(0, 1)
-                                      .toUpperCase()
-                                  : 'B',
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                          title: Text(
-                            book.businessName,
-                            style: TextStyle(
-                                fontWeight: isActive
-                                    ? FontWeight.w700
-                                    : FontWeight.w600),
-                          ),
-                          subtitle: FutureBuilder<int>(
-                            future: _customerCountFor(book.id),
-                            builder: (_, snap) => Text(
-                                '${snap.data ?? 0} Customers'),
-                          ),
-                          trailing: isActive
-                              ? const Icon(Icons.check_circle,
-                                  color: AppTheme.primaryColor)
-                              : null,
-                          onTap: isActive
-                              ? null
-                              : () async {
-                                  Navigator.pop(ctx);
-                                  await auth.switchToBook(book.id);
-                                  if (context.mounted) {
-                                    AppHelpers.showSuccessSnackBar(context,
-                                        'Switched to "${book.businessName}"');
-                                  }
-                                },
-                        );
-                      },
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  // Create new khatabook option
-                  ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                            color: AppTheme.primaryColor, width: 1.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.add,
-                          color: AppTheme.primaryColor, size: 22),
-                    ),
-                    title: const Text('CREATE NEW KHATABOOK',
-                        style: TextStyle(
-                            color: AppTheme.primaryColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            letterSpacing: 0.5)),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _showCreateKhatabookSheet(context);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
-            );
+        return _KhatabookSwitcherSheet(
+          books: allBooks,
+          counts: counts,
+          activeId: auth.profile?.id ?? '',
+          onSelect: (book) async {
+            Navigator.pop(ctx);
+            await LocalDatabase.instance.setActiveBusinessProfile(book.id);
+            if (!context.mounted) return;
+            // Reload profile
+            await context.read<AuthProvider>().checkAuth();
+            // Reload all providers with the new bookId
+            final bookId = book.id;
+            if (!context.mounted) return;
+            context.read<CustomerProvider>().loadCustomers(bookId: bookId);
+            context.read<SupplierProvider>().loadSuppliers(bookId: bookId);
+            context.read<TransactionProvider>().loadTransactions(bookId: bookId);
+            context.read<CashbookProvider>().loadEntries(bookId: bookId);
+            context.read<BillProvider>().loadBills(bookId: bookId);
+          },
+          onCreateNew: () {
+            Navigator.pop(ctx);
+            _showCreateKhatabookSheet(context);
           },
         );
       },
     );
   }
 
-  Future<int> _customerCountFor(String bookId) async {
-    // Lightweight helper just for the switcher list; falls back to the
-    // currently loaded provider count when it's the active book (avoids an
-    // extra DB hit for the common case).
-    final auth = context.read<AuthProvider>();
-    if (bookId == auth.activeBookId) {
-      return context.read<CustomerProvider>().customers.length;
-    }
-    return LocalDatabaseCustomerCount.count(bookId);
-  }
-
+  // ── Create new khatabook sheet ───────────────────────────────────────────
   void _showCreateKhatabookSheet(BuildContext context) {
     final nameCtrl = TextEditingController();
+    final ownerCtrl = TextEditingController();
+    bool saving = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -195,95 +105,145 @@ class _PartiesScreenState extends State<PartiesScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            left: 20,
-            right: 20,
-            top: 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+        return StatefulBuilder(builder: (ctx, setSt) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Create New Khatabook',
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              const Text(
-                  'A new khatabook starts empty — its own customers, suppliers, bills and cashbook.',
-                  style:
-                      TextStyle(fontSize: 13, color: Color(0xFF9E9E9E))),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameCtrl,
-                textCapitalization: TextCapitalization.words,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Business / Khatabook Name',
-                  prefixIcon:
-                      const Icon(Icons.store_outlined, size: 20),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(
-                        color: AppTheme.primaryColor, width: 2),
-                  ),
+                const SizedBox(height: 20),
+                const Text('Create New Khatabook',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text(
+                  'You can maintain separate books for different businesses.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
+                const SizedBox(height: 20),
+                TextField(
+                  controller: nameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Business / Khata Name *',
+                    prefixIcon:
+                        const Icon(Icons.store_outlined, size: 20),
+                    border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: AppTheme.primaryColor, width: 2),
+                    ),
                   ),
-                  onPressed: () async {
-                    final name = nameCtrl.text.trim();
-                    if (name.isEmpty) return;
-                    Navigator.pop(ctx);
-                    // FIX #1: actually create a brand-new, isolated
-                    // khatabook (own customers/suppliers/bills/items/
-                    // cashbook) instead of renaming the existing one.
-                    await context
-                        .read<AuthProvider>()
-                        .createNewKhatabook(businessName: name);
-                    if (context.mounted) {
-                      AppHelpers.showSuccessSnackBar(
-                          context, 'Khatabook "$name" created!');
-                    }
-                  },
-                  child: const Text('CREATE KHATABOOK',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          letterSpacing: 0.5)),
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ownerCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Owner Name',
+                    prefixIcon:
+                        const Icon(Icons.person_outline, size: 20),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: AppTheme.primaryColor, width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final name = nameCtrl.text.trim();
+                            if (name.isEmpty) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Please enter a business name')),
+                              );
+                              return;
+                            }
+                            setSt(() => saving = true);
+                            final newBook = BusinessProfile(
+                              id: AppHelpers.generateId(),
+                              businessName: name,
+                              ownerName: ownerCtrl.text.trim(),
+                              phone: context
+                                      .read<AuthProvider>()
+                                      .profile
+                                      ?.phone ??
+                                  '',
+                              createdAt: DateTime.now(),
+                              isActive: false,
+                            );
+                            await LocalDatabase.instance
+                                .createBusinessProfile(newBook);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (context.mounted) {
+                              AppHelpers.showSuccessSnackBar(context,
+                                  '"$name" khatabook created! Tap to switch.');
+                              // Re-open switcher so user can immediately switch
+                              Future.delayed(
+                                  const Duration(milliseconds: 300),
+                                  () {
+                                if (context.mounted) {
+                                  _showKhatabookSwitcher(context);
+                                }
+                              });
+                            }
+                          },
+                    child: saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('CREATE KHATABOOK',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          );
+        });
       },
     );
   }
 
+  // ── Business name quick-edit sheet ──────────────────────────────────────
   void _showEditBusinessSheet(BuildContext context) {
     final auth = context.read<AuthProvider>();
     final nameCtrl =
@@ -319,8 +279,8 @@ class _PartiesScreenState extends State<PartiesScreen>
               ),
               const SizedBox(height: 20),
               const Text('Edit Business',
-                  style: TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700)),
+                  style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
               TextField(
                 controller: nameCtrl,
@@ -413,8 +373,9 @@ class _PartiesScreenState extends State<PartiesScreen>
                 onPressed: widget.onBackToMore,
               )
             : null,
+        // ── Business name tappable → opens khatabook switcher ────────────
         title: GestureDetector(
-          onTap: () => _showBusinessSwitcher(context),
+          onTap: () => _showKhatabookSwitcher(context),
           child: Consumer<AuthProvider>(
             builder: (_, auth, __) => Row(
               mainAxisSize: MainAxisSize.min,
@@ -436,9 +397,14 @@ class _PartiesScreenState extends State<PartiesScreen>
             ),
           ),
         ),
-        // FIX #2: pencil/edit icon removed from the app bar actions.
-        // Editing the business name is still reachable via the khatabook
-        // switcher sheet (tap the title) -> business name shown there.
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined,
+                color: Colors.white, size: 20),
+            onPressed: () => _showEditBusinessSheet(context),
+            tooltip: 'Edit Business',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           indicatorColor: Colors.white,
@@ -446,9 +412,7 @@ class _PartiesScreenState extends State<PartiesScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
           labelStyle: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-              letterSpacing: 1),
+              fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: 1),
           unselectedLabelStyle: const TextStyle(fontSize: 14),
           tabs: const [
             Tab(text: 'CUSTOMERS'),
@@ -461,6 +425,176 @@ class _PartiesScreenState extends State<PartiesScreen>
         children: const [
           _CustomersTab(),
           _SuppliersTab(),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// KHATABOOK SWITCHER SHEET
+// ══════════════════════════════════════════════════════════════════════════════
+class _KhatabookSwitcherSheet extends StatelessWidget {
+  final List<BusinessProfile> books;
+  final Map<String, int> counts;
+  final String activeId;
+  final void Function(BusinessProfile) onSelect;
+  final VoidCallback onCreateNew;
+
+  const _KhatabookSwitcherSheet({
+    required this.books,
+    required this.counts,
+    required this.activeId,
+    required this.onSelect,
+    required this.onCreateNew,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Title
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Row(
+              children: [
+                Text('Select Khatabook',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Book list
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: books.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1, indent: 72),
+              itemBuilder: (_, i) {
+                final book = books[i];
+                final isActive = book.id == activeId;
+                final customerCount = counts[book.id] ?? 0;
+                final initials = book.businessName.isNotEmpty
+                    ? book.businessName[0].toUpperCase()
+                    : '?';
+
+                return InkWell(
+                  onTap: () => onSelect(book),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    child: Row(
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppTheme.primaryColor
+                                : AppHelpers.getAvatarColor(
+                                        book.businessName)
+                                    .withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              initials,
+                              style: TextStyle(
+                                color: isActive
+                                    ? Colors.white
+                                    : AppHelpers.getAvatarColor(
+                                        book.businessName),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                book.businessName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: isActive
+                                      ? AppTheme.primaryColor
+                                      : const Color(0xFF212121),
+                                ),
+                              ),
+                              Text(
+                                '$customerCount Customer${customerCount == 1 ? '' : 's'}',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF9E9E9E)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isActive)
+                          const Icon(Icons.check_circle,
+                              color: AppTheme.primaryColor, size: 24),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Create new
+          InkWell(
+            onTap: onCreateNew,
+            child: const Padding(
+              padding:
+                  EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Color(0xFF1565C0),
+                    child: Icon(Icons.add, color: Colors.white, size: 22),
+                  ),
+                  SizedBox(width: 14),
+                  Text(
+                    'CREATE NEW KHATABOOK',
+                    style: TextStyle(
+                      color: Color(0xFF1565C0),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -514,8 +648,7 @@ class _CustomersTabState extends State<_CustomersTab> {
         // Summary cards
         Container(
           color: Colors.white,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             children: [
               Row(
@@ -531,8 +664,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                     width: 1,
                     height: 50,
                     color: const Color(0xFFE0E0E0),
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 12),
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                   Expanded(
                     child: _SummaryCard(
@@ -544,24 +676,19 @@ class _CustomersTabState extends State<_CustomersTab> {
                 ],
               ),
               const SizedBox(height: 10),
-              // Only View Reports button (no Collection)
               _OutlineButton(
                 icon: Icons.picture_as_pdf_outlined,
                 label: 'View Reports',
                 color: const Color(0xFF1565C0),
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const ReportsScreen()),
+                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
                 ),
               ),
             ],
           ),
         ),
 
-        // Search + Cashbook button row (FIX #2: replaces the old pencil
-        // icon flow — Cashbook now sits right next to the search field,
-        // matching the reference Khatabook layout) + filter chips
         Container(
           color: Colors.white,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -614,14 +741,12 @@ class _CustomersTabState extends State<_CustomersTab> {
                   _FilterChip(
                       label: 'To Get',
                       selected: _filter == 'toGet',
-                      onTap: () =>
-                          setState(() => _filter = 'toGet')),
+                      onTap: () => setState(() => _filter = 'toGet')),
                   const SizedBox(width: 8),
                   _FilterChip(
                       label: 'To Give',
                       selected: _filter == 'toGive',
-                      onTap: () =>
-                          setState(() => _filter = 'toGive')),
+                      onTap: () => setState(() => _filter = 'toGive')),
                   const Spacer(),
                   Text(
                     '${customers.length} ${customers.length == 1 ? 'party' : 'parties'}',
@@ -644,14 +769,12 @@ class _CustomersTabState extends State<_CustomersTab> {
                       onAddCustomer: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) =>
-                                const AddCustomerScreen()),
+                            builder: (_) => const AddCustomerScreen()),
                       ),
                     )
                   : RefreshIndicator(
-                      onRefresh: () => context
-                          .read<CustomerProvider>()
-                          .loadCustomers(),
+                      onRefresh: () =>
+                          context.read<CustomerProvider>().loadCustomers(),
                       child: ListView.separated(
                         padding: EdgeInsets.zero,
                         itemCount: customers.length,
@@ -663,7 +786,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                     ),
         ),
 
-        // ── Khatabook-style bottom ADD CUSTOMER bar ────────────────────────
+        // Bottom ADD CUSTOMER bar
         Container(
           color: Colors.white,
           padding: EdgeInsets.only(
@@ -741,14 +864,12 @@ class _SuppliersTabState extends State<_SuppliersTab> {
 
     final toGet = suppliers.where((s) => s.balance > 0).toList();
     final toGive = suppliers.where((s) => s.balance < 0).toList();
-    final totalToGet =
-        toGet.fold(0.0, (sum, s) => sum + s.balance);
+    final totalToGet = toGet.fold(0.0, (sum, s) => sum + s.balance);
     final totalToGive =
         toGive.fold(0.0, (sum, s) => sum + s.balance.abs());
 
     return Column(
       children: [
-        // Summary
         Container(
           color: Colors.white,
           padding: const EdgeInsets.all(16),
@@ -767,8 +888,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                     width: 1,
                     height: 50,
                     color: const Color(0xFFE0E0E0),
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 12),
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                   Expanded(
                     child: _SummaryCard(
@@ -780,22 +900,19 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                 ],
               ),
               const SizedBox(height: 10),
-              // Only View Reports (no collection)
               _OutlineButton(
                 icon: Icons.picture_as_pdf_outlined,
                 label: 'View Reports',
                 color: const Color(0xFF1565C0),
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const ReportsScreen()),
+                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
                 ),
               ),
             ],
           ),
         ),
 
-        // Search + Cashbook button row (same layout as Customers tab)
         Container(
           color: Colors.white,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -819,8 +936,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                     isDense: true,
                     filled: true,
                     fillColor: const Color(0xFFF5F5F5),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24),
                       borderSide: BorderSide.none,
@@ -844,14 +960,13 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                       onAddSupplier: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const AddPartyScreen(
-                                isSupplier: true)),
+                            builder: (_) =>
+                                const AddPartyScreen(isSupplier: true)),
                       ),
                     )
                   : RefreshIndicator(
-                      onRefresh: () => context
-                          .read<SupplierProvider>()
-                          .loadSuppliers(),
+                      onRefresh: () =>
+                          context.read<SupplierProvider>().loadSuppliers(),
                       child: ListView.separated(
                         padding: EdgeInsets.zero,
                         itemCount: suppliers.length,
@@ -863,7 +978,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                     ),
         ),
 
-        // ── Khatabook-style bottom ADD SUPPLIER bar ────────────────────────
+        // Bottom ADD SUPPLIER bar
         Container(
           color: Colors.white,
           padding: EdgeInsets.only(
@@ -905,7 +1020,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
   }
 }
 
-// ── Cashbook quick-access button (next to search bar) ────────────────────────
+// ── Cashbook quick-access button ──────────────────────────────────────────────
 class _CashbookButton extends StatelessWidget {
   final VoidCallback onTap;
   const _CashbookButton({required this.onTap});
@@ -923,13 +1038,13 @@ class _CashbookButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppTheme.primaryColor),
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.menu_book_outlined,
+            Icon(Icons.menu_book_outlined,
                 size: 18, color: AppTheme.primaryColor),
-            const SizedBox(width: 6),
-            const Text(
+            SizedBox(width: 6),
+            Text(
               'Cashbook',
               style: TextStyle(
                 color: AppTheme.primaryColor,
@@ -971,8 +1086,7 @@ class _SupplierTile extends StatelessWidget {
             builder: (_) => SupplierScreen(supplier: supplier)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Container(
@@ -1004,8 +1118,7 @@ class _SupplierTile extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
                           color: Color(0xFF212121))),
-                  if (supplier.phone != null &&
-                      supplier.phone!.isNotEmpty)
+                  if (supplier.phone != null && supplier.phone!.isNotEmpty)
                     Text(supplier.phone!,
                         style: const TextStyle(
                             fontSize: 12, color: Color(0xFF9E9E9E))),
@@ -1035,9 +1148,7 @@ class _SupplierTile extends StatelessWidget {
               )
             else
               const Text('Settled',
-                  style: TextStyle(
-                      fontSize: 12, color: Color(0xFF9E9E9E))),
-            // FIX #3: trailing chevron arrow removed.
+                  style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E))),
           ],
         ),
       ),
@@ -1072,9 +1183,8 @@ class _SupplierScreenState extends State<SupplierScreen> {
 
   Future<void> _loadTransactions() async {
     setState(() => _loading = true);
-    final list = await context
-        .read<CustomerProvider>()
-        .getTransactions(_supplierId);
+    final list =
+        await context.read<CustomerProvider>().getTransactions(_supplierId);
     if (!mounted) return;
     setState(() {
       _transactions = list;
@@ -1083,30 +1193,37 @@ class _SupplierScreenState extends State<SupplierScreen> {
   }
 
   Future<void> _showAddTransaction(bool isGave) async {
+    CustomerTransaction? newTx;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _SupplierTransactionSheet(
+        supplierId: _supplier.id,
         supplierName: _supplier.name,
         isGave: isGave,
-        onAdded: (tx) async {
-          await context.read<CustomerProvider>().addTransaction(tx);
-          if (!mounted) return;
-          final double delta = tx.isGiven ? tx.amount : -tx.amount;
-          final updated =
-              _supplier.copyWith(balance: _supplier.balance + delta);
-          await context.read<SupplierProvider>().updateSupplier(updated);
-          if (!mounted) return;
-          setState(() {
-            _supplier = updated;
-            _transactions.insert(0, tx);
-          });
-          AppHelpers.showSuccessSnackBar(context, 'Entry added');
+        onAdded: (tx) {
+          newTx = tx;
         },
       ),
     );
+
+    if (newTx != null && mounted) {
+      await context.read<CustomerProvider>().addTransaction(newTx!);
+      if (!mounted) return;
+      final double delta = newTx!.isGiven ? newTx!.amount : -newTx!.amount;
+      final updated =
+          _supplier.copyWith(balance: _supplier.balance + delta);
+      await context.read<SupplierProvider>().updateSupplier(updated);
+      if (!mounted) return;
+      setState(() {
+        _supplier = updated;
+        _transactions.insert(0, newTx!);
+      });
+      AppHelpers.showSuccessSnackBar(context, 'Entry added');
+    }
   }
 
   void _deleteTransaction(String txId) async {
@@ -1164,6 +1281,45 @@ class _SupplierScreenState extends State<SupplierScreen> {
       AppHelpers.showSuccessSnackBar(context, 'Supplier deleted');
       Navigator.pop(context);
     }
+  }
+
+  void _openReport() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SupplierReportScreen(
+          supplier: _supplier,
+          transactions: _transactions,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _callSupplier() async {
+    if (_supplier.phone == null || _supplier.phone!.isEmpty) {
+      AppHelpers.showErrorSnackBar(context, 'No phone number');
+      return;
+    }
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Call Supplier'),
+        content: Text('Phone: ${_supplier.phone}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text('Dial: ${_supplier.phone}'),
+        action: SnackBarAction(label: 'OK', onPressed: () {}),
+      ),
+    );
   }
 
   @override
@@ -1249,7 +1405,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.call, color: Colors.white),
-            onPressed: _supplier.phone != null ? () {} : null,
+            onPressed: _callSupplier,
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.white),
@@ -1262,8 +1418,8 @@ class _SupplierScreenState extends State<SupplierScreen> {
           // Balance banner
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1282,7 +1438,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
               ],
             ),
           ),
-          // PDF Report shortcut
+          // Report shortcut
           Container(
             color: const Color(0xFFF5F5F5),
             padding:
@@ -1290,7 +1446,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
             child: Row(
               children: [
                 GestureDetector(
-                  onTap: () {},
+                  onTap: _openReport,
                   child: const Row(
                     children: [
                       Icon(Icons.picture_as_pdf_outlined,
@@ -1314,8 +1470,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                 : _transactions.isEmpty
                     ? EmptyState(
                         title: 'No transactions yet',
-                        subtitle:
-                            'Add a payment or entry to get started',
+                        subtitle: 'Add a payment or entry to get started',
                         icon: Icons.receipt_long_outlined,
                         actionLabel: 'Add Entry',
                         onAction: () => _showAddTransaction(true),
@@ -1329,8 +1484,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                             final dateKey = dateKeys[di];
                             final txs = grouped[dateKey]!;
                             return Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -1343,8 +1497,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                       borderRadius:
                                           BorderRadius.circular(20),
                                       border: Border.all(
-                                          color: const Color(
-                                              0xFFDDDDDD)),
+                                          color: const Color(0xFFDDDDDD)),
                                     ),
                                     child: Text(
                                       '$dateKey${_isToday(txs.first.date) ? " • Today" : ""}',
@@ -1354,10 +1507,10 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                     ),
                                   ),
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 4),
-                                  child: const Row(
+                                  child: Row(
                                     children: [
                                       Expanded(
                                         flex: 3,
@@ -1365,8 +1518,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                             style: TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF9E9E9E),
-                                                fontWeight:
-                                                    FontWeight.w600,
+                                                fontWeight: FontWeight.w600,
                                                 letterSpacing: 0.5)),
                                       ),
                                       Expanded(
@@ -1375,8 +1527,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                             style: TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF9E9E9E),
-                                                fontWeight:
-                                                    FontWeight.w600,
+                                                fontWeight: FontWeight.w600,
                                                 letterSpacing: 0.5)),
                                       ),
                                       Expanded(
@@ -1385,8 +1536,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                             style: TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF9E9E9E),
-                                                fontWeight:
-                                                    FontWeight.w600,
+                                                fontWeight: FontWeight.w600,
                                                 letterSpacing: 0.5)),
                                       ),
                                     ],
@@ -1422,7 +1572,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                           borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _showAddTransaction(true),
-                    child: const Text('YOU GAVE  ₹',
+                    child: const Text('YOU GAVE  Rs.',
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
@@ -1440,7 +1590,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                           borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _showAddTransaction(false),
-                    child: const Text('YOU GOT  ₹',
+                    child: const Text('YOU GOT  Rs.',
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
@@ -1473,10 +1623,6 @@ class _SupplierTxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGave = tx.isGiven;
-    final color =
-        isGave ? const Color(0xFFB71C1C) : const Color(0xFF1B5E20);
-    final bgColor =
-        isGave ? const Color(0xFFFFF0F0) : const Color(0xFFF0FFF4);
 
     return GestureDetector(
       onLongPress: () async {
@@ -1501,8 +1647,7 @@ class _SupplierTxRow extends StatelessWidget {
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: isGave ? const Color(0xFFFFF8F8) : Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -1534,14 +1679,22 @@ class _SupplierTxRow extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: bgColor,
+                      color: isGave
+                          ? const Color(0xFFFFF0F0)
+                          : const Color(0xFFF0FFF4),
                       borderRadius: BorderRadius.circular(4),
-                      border:
-                          Border.all(color: color.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: isGave
+                              ? const Color(0xFFFFCDD2)
+                              : const Color(0xFFC8E6C9)),
                     ),
                     child: Text(
                       tx.paymentMode.toUpperCase(),
-                      style: TextStyle(fontSize: 10, color: color),
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: isGave
+                              ? const Color(0xFFB71C1C)
+                              : const Color(0xFF1B5E20)),
                     ),
                   ),
                 ],
@@ -1587,11 +1740,13 @@ class _SupplierTxRow extends StatelessWidget {
 
 // ── Supplier Transaction Sheet ────────────────────────────────────────────────
 class _SupplierTransactionSheet extends StatefulWidget {
+  final String supplierId;
   final String supplierName;
   final bool isGave;
   final void Function(CustomerTransaction) onAdded;
 
   const _SupplierTransactionSheet({
+    required this.supplierId,
     required this.supplierName,
     required this.isGave,
     required this.onAdded,
@@ -1607,6 +1762,7 @@ class _SupplierTransactionSheetState
   final _amountCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
   String _paymentMode = 'cash';
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -1616,30 +1772,31 @@ class _SupplierTransactionSheetState
   }
 
   void _submit() {
+    if (_submitted) return;
     final amount = double.tryParse(_amountCtrl.text.trim());
     if (amount == null || amount <= 0) {
       AppHelpers.showErrorSnackBar(context, 'Enter a valid amount');
       return;
     }
+    _submitted = true;
     final tx = CustomerTransaction(
       id: AppHelpers.generateId(),
-      customerId: '',
+      customerId: widget.supplierId,
       amount: amount,
       isGiven: widget.isGave,
       note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
       paymentMode: _paymentMode,
       date: DateTime.now(),
     );
-    Navigator.pop(context);
     widget.onAdded(tx);
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     final isGave = widget.isGave;
-    final color = isGave
-        ? const Color(0xFFD32F2F)
-        : const Color(0xFF1B5E20);
+    final color =
+        isGave ? const Color(0xFFD32F2F) : const Color(0xFF1B5E20);
     final label = isGave ? 'YOU GAVE' : 'YOU GOT';
 
     return Padding(
@@ -1678,11 +1835,12 @@ class _SupplierTransactionSheetState
             keyboardType:
                 const TextInputType.numberWithOptions(decimal: true),
             autofocus: true,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+                fontSize: 24, fontWeight: FontWeight.w700),
             decoration: InputDecoration(
-              prefixText: '₹ ',
+              prefixText: 'Rs. ',
               prefixStyle: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.w700, color: color),
+                  fontSize: 18, fontWeight: FontWeight.w700, color: color),
               hintText: '0',
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1715,7 +1873,7 @@ class _SupplierTransactionSheetState
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10))),
-              onPressed: _submit,
+              onPressed: _submitted ? null : _submit,
               child: Text('Save $label Entry',
                   style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 15)),
@@ -1728,7 +1886,433 @@ class _SupplierTransactionSheetState
   }
 }
 
-// ── Shared Widgets ────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// SUPPLIER REPORT SCREEN — with working PDF download + share
+// ══════════════════════════════════════════════════════════════════════════════
+class SupplierReportScreen extends StatefulWidget {
+  final Supplier supplier;
+  final List<CustomerTransaction> transactions;
+
+  const SupplierReportScreen({
+    super.key,
+    required this.supplier,
+    required this.transactions,
+  });
+
+  @override
+  State<SupplierReportScreen> createState() => _SupplierReportScreenState();
+}
+
+class _SupplierReportScreenState extends State<SupplierReportScreen> {
+  DateTime? _startDate;
+  DateTime? _endDate;
+  bool _isDownloading = false;
+  bool _isSharing = false;
+
+  List<CustomerTransaction> get _filtered {
+    return widget.transactions.where((t) {
+      if (_startDate != null && t.date.isBefore(_startDate!)) return false;
+      if (_endDate != null &&
+          t.date.isAfter(_endDate!.add(const Duration(days: 1)))) {
+        return false;
+      }
+      return true;
+    }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  double get _totalGiven =>
+      _filtered.where((t) => t.isGiven).fold(0.0, (s, t) => s + t.amount);
+  double get _totalReceived =>
+      _filtered.where((t) => !t.isGiven).fold(0.0, (s, t) => s + t.amount);
+
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _startDate = picked);
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) setState(() => _endDate = picked);
+  }
+
+  /// Download = generate PDF → open OS share sheet so user can save to
+  /// Downloads, Drive, email, etc.
+  Future<void> _download() async {
+    if (_isDownloading) return;
+    setState(() => _isDownloading = true);
+    try {
+      await PdfService.instance.downloadPdf(
+        context,
+        partyName: widget.supplier.name,
+        phone: widget.supplier.phone,
+        balance: widget.supplier.balance,
+        transactions: _filtered,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  /// Share = generate PDF → open OS share sheet (user picks WhatsApp /
+  /// email / Drive / etc.)
+  Future<void> _share() async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+    try {
+      await PdfService.instance.shareOnWhatsApp(
+        context,
+        partyName: widget.supplier.name,
+        phone: widget.supplier.phone,
+        balance: widget.supplier.balance,
+        transactions: _filtered,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _filtered;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1565C0),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text('Report of ${widget.supplier.name}',
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 17)),
+      ),
+      body: Column(
+        children: [
+          // Date filter
+          Container(
+            color: const Color(0xFF1565C0),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _DateChip(
+                    label: _startDate != null
+                        ? AppHelpers.formatDate(_startDate!)
+                        : 'START DATE',
+                    onTap: _pickStartDate,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _DateChip(
+                    label: _endDate != null
+                        ? AppHelpers.formatDate(_endDate!)
+                        : 'END DATE',
+                    onTap: _pickEndDate,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Net balance
+          Container(
+            color: Colors.white,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Net Balance',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(
+                  'Rs. ${widget.supplier.balance.abs().toStringAsFixed(2)}',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: widget.supplier.balance >= 0
+                          ? const Color(0xFF00796B)
+                          : const Color(0xFFB71C1C)),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Container(
+            color: Colors.white,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text('${rows.length} Entries',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+                const Spacer(),
+                Text(
+                    'You Gave: Rs. ${_totalGiven.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF9E9E9E))),
+                const SizedBox(width: 12),
+                Text(
+                    'You Got: Rs. ${_totalReceived.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF9E9E9E))),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Column headers
+          Container(
+            color: const Color(0xFFF5F5F5),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text('Date',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5)),
+                ),
+                Expanded(
+                  child: Text('YOU GAVE',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5)),
+                ),
+                Expanded(
+                  child: Text('YOU GOT',
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9E9E9E),
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5)),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          Expanded(
+            child: rows.isEmpty
+                ? Center(
+                    child: Text('No entries found',
+                        style: TextStyle(color: Colors.grey.shade500)),
+                  )
+                : ListView.separated(
+                    itemCount: rows.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final t = rows[i];
+                      return Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(AppHelpers.formatDate(t.date),
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFF212121))),
+                                  if (t.note != null &&
+                                      t.note!.isNotEmpty)
+                                    Text(t.note!,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF9E9E9E))),
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: t.isGiven
+                                          ? const Color(0xFFFFF0F0)
+                                          : const Color(0xFFF0FFF4),
+                                      borderRadius:
+                                          BorderRadius.circular(4),
+                                      border: Border.all(
+                                          color: t.isGiven
+                                              ? const Color(0xFFFFCDD2)
+                                              : const Color(0xFFC8E6C9)),
+                                    ),
+                                    child: Text(
+                                      t.paymentMode.toUpperCase(),
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: t.isGiven
+                                              ? const Color(0xFFB71C1C)
+                                              : const Color(0xFF1B5E20)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                t.isGiven
+                                    ? 'Rs. ${t.amount.toStringAsFixed(2)}'
+                                    : '',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Color(0xFFB71C1C),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                !t.isGiven
+                                    ? 'Rs. ${t.amount.toStringAsFixed(2)}'
+                                    : '',
+                                textAlign: TextAlign.end,
+                                style: const TextStyle(
+                                    color: Color(0xFF1B5E20),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Bottom — Download PDF + Share (WhatsApp)
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: MediaQuery.of(context).padding.bottom + 12,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isDownloading ? null : _download,
+                    icon: _isDownloading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2))
+                        : const Icon(Icons.picture_as_pdf_outlined,
+                            color: Color(0xFF1565C0)),
+                    label: Text(
+                        _isDownloading ? 'PREPARING...' : 'DOWNLOAD PDF',
+                        style: const TextStyle(
+                            color: Color(0xFF1565C0),
+                            fontWeight: FontWeight.w700)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF1565C0)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isSharing ? null : _share,
+                    icon: _isSharing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.share, color: Colors.white),
+                    label: Text(_isSharing ? 'SHARING...' : 'SHARE PDF',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _DateChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.calendar_today,
+                size: 14, color: Color(0xFF1565C0)),
+            const SizedBox(width: 6),
+            Text(label,
+                style: const TextStyle(
+                    color: Color(0xFF1565C0),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared small widgets ──────────────────────────────────────────────────────
 class _SummaryCard extends StatelessWidget {
   final String label;
   final double amount;
@@ -1743,8 +2327,8 @@ class _SummaryCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style:
-                const TextStyle(fontSize: 12, color: Color(0xFF757575))),
+            style: const TextStyle(
+                fontSize: 12, color: Color(0xFF757575))),
         const SizedBox(height: 4),
         Text(
           AppHelpers.formatCurrencyCompact(amount),
@@ -1828,15 +2412,13 @@ class _FilterChip extends StatelessWidget {
               fontSize: 13,
               fontWeight:
                   selected ? FontWeight.w600 : FontWeight.w400,
-              color:
-                  selected ? Colors.white : const Color(0xFF616161)),
+              color: selected ? Colors.white : const Color(0xFF616161)),
         ),
       ),
     );
   }
 }
 
-// ── Customer Tile ─────────────────────────────────────────────────────────────
 class _CustomerTile extends StatelessWidget {
   final Customer customer;
   const _CustomerTile({required this.customer});
@@ -1859,8 +2441,7 @@ class _CustomerTile extends StatelessWidget {
             builder: (_) => CustomerScreen(customer: customer)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
             Container(
@@ -1917,7 +2498,6 @@ class _CustomerTile extends StatelessWidget {
               const Text('Settled',
                   style: TextStyle(
                       fontSize: 12, color: Color(0xFF9E9E9E))),
-            // FIX #3: trailing chevron arrow removed.
           ],
         ),
       ),
@@ -1925,7 +2505,6 @@ class _CustomerTile extends StatelessWidget {
   }
 }
 
-// ── Empty States ──────────────────────────────────────────────────────────────
 class _CustomerEmptyState extends StatelessWidget {
   final VoidCallback onAddCustomer;
   const _CustomerEmptyState({required this.onAddCustomer});
@@ -2004,8 +2583,8 @@ class _SupplierEmptyState extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text('Add your suppliers to track payables',
-                style: TextStyle(
-                    fontSize: 13, color: Color(0xFF9E9E9E)),
+                style:
+                    TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
                 textAlign: TextAlign.center),
           ),
         ],

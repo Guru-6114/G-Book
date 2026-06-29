@@ -72,20 +72,18 @@ class BusinessProfile {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'businessName': businessName,
-      'ownerName': ownerName,
-      'phone': phone,
-      'email': email,
-      'address': address,
-      'gstin': gstin,
-      'category': category,
-      'createdAt': createdAt.toIso8601String(),
-      'isActive': isActive ? 1 : 0,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'businessName': businessName,
+        'ownerName': ownerName,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'gstin': gstin,
+        'category': category,
+        'createdAt': createdAt.toIso8601String(),
+        'isActive': isActive ? 1 : 0,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
@@ -152,33 +150,29 @@ class Customer {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'phone': phone,
-      'email': email,
-      'address': address,
-      'balance': balance,
-      'createdAt': createdAt.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'balance': balance,
+        'createdAt': createdAt.toIso8601String(),
+        'bookId': bookId,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
-  factory Customer.fromMap(Map<String, dynamic> map) {
-    return Customer(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      phone: map['phone'] as String?,
-      email: map['email'] as String?,
-      address: map['address'] as String?,
-      balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      bookId: (map['bookId'] as String?) ?? '',
-    );
-  }
+  factory Customer.fromMap(Map<String, dynamic> map) => Customer(
+        id: map['id'] as String,
+        name: map['name'] as String,
+        phone: map['phone'] as String?,
+        email: map['email'] as String?,
+        address: map['address'] as String?,
+        balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
+        createdAt: DateTime.parse(map['createdAt'] as String),
+        bookId: (map['bookId'] as String?) ?? '',
+      );
 
   factory Customer.fromJson(Map<String, dynamic> json) =>
       Customer.fromMap(json);
@@ -228,33 +222,30 @@ class CustomerTransaction {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'customerId': customerId,
-      'amount': amount,
-      'isGiven': isGiven ? 1 : 0,
-      'note': note,
-      'paymentMode': paymentMode,
-      'date': date.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'customerId': customerId,
+        'amount': amount,
+        'isGiven': isGiven ? 1 : 0,
+        'note': note,
+        'paymentMode': paymentMode,
+        'date': date.toIso8601String(),
+        'bookId': bookId,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
-  factory CustomerTransaction.fromMap(Map<String, dynamic> map) {
-    return CustomerTransaction(
-      id: map['id'] as String,
-      customerId: map['customerId'] as String,
-      amount: (map['amount'] as num).toDouble(),
-      isGiven: (map['isGiven'] as int) == 1,
-      note: map['note'] as String?,
-      paymentMode: (map['paymentMode'] as String?) ?? 'cash',
-      date: DateTime.parse(map['date'] as String),
-      bookId: (map['bookId'] as String?) ?? '',
-    );
-  }
+  factory CustomerTransaction.fromMap(Map<String, dynamic> map) =>
+      CustomerTransaction(
+        id: map['id'] as String,
+        customerId: map['customerId'] as String,
+        amount: (map['amount'] as num).toDouble(),
+        isGiven: (map['isGiven'] as int) == 1,
+        note: map['note'] as String?,
+        paymentMode: (map['paymentMode'] as String?) ?? 'cash',
+        date: DateTime.parse(map['date'] as String),
+        bookId: (map['bookId'] as String?) ?? '',
+      );
 
   factory CustomerTransaction.fromJson(Map<String, dynamic> json) =>
       CustomerTransaction.fromMap(json);
@@ -288,7 +279,8 @@ class AppTransaction {
     this.referenceNumber,
     String? type,
     this.bookId = '',
-  }) : type = type ?? (isIncome ? TransactionType.credit : TransactionType.debit);
+  }) : type =
+            type ?? (isIncome ? TransactionType.credit : TransactionType.debit);
 
   AppTransaction copyWith({
     String? id,
@@ -320,18 +312,16 @@ class AppTransaction {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'amount': amount,
-      'isIncome': isIncome ? 1 : 0,
-      'category': category,
-      'note': note,
-      'paymentMode': paymentMode,
-      'date': date.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'amount': amount,
+        'isIncome': isIncome ? 1 : 0,
+        'category': category,
+        'note': note,
+        'paymentMode': paymentMode,
+        'date': date.toIso8601String(),
+        'bookId': bookId,
+      };
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -413,29 +403,25 @@ class CashbookEntry {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'amount': amount,
-      'isCashIn': isCashIn ? 1 : 0,
-      'description': description,
-      'paymentMode': paymentMode,
-      'date': date.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'amount': amount,
+        'isCashIn': isCashIn ? 1 : 0,
+        'description': description,
+        'paymentMode': paymentMode,
+        'date': date.toIso8601String(),
+        'bookId': bookId,
+      };
 
-  factory CashbookEntry.fromMap(Map<String, dynamic> map) {
-    return CashbookEntry(
-      id: map['id'] as String,
-      amount: (map['amount'] as num).toDouble(),
-      isCashIn: (map['isCashIn'] as int) == 1,
-      description: map['description'] as String?,
-      paymentMode: (map['paymentMode'] as String?) ?? 'cash',
-      date: DateTime.parse(map['date'] as String),
-      bookId: (map['bookId'] as String?) ?? '',
-    );
-  }
+  factory CashbookEntry.fromMap(Map<String, dynamic> map) => CashbookEntry(
+        id: map['id'] as String,
+        amount: (map['amount'] as num).toDouble(),
+        isCashIn: (map['isCashIn'] as int) == 1,
+        description: map['description'] as String?,
+        paymentMode: (map['paymentMode'] as String?) ?? 'cash',
+        date: DateTime.parse(map['date'] as String),
+        bookId: (map['bookId'] as String?) ?? '',
+      );
 }
 
 // ── Supplier ──────────────────────────────────────────────────────────────────
@@ -486,35 +472,31 @@ class Supplier {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'phone': phone,
-      'email': email,
-      'address': address,
-      'gstin': gstin,
-      'balance': balance,
-      'createdAt': createdAt.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'gstin': gstin,
+        'balance': balance,
+        'createdAt': createdAt.toIso8601String(),
+        'bookId': bookId,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
-  factory Supplier.fromMap(Map<String, dynamic> map) {
-    return Supplier(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      phone: map['phone'] as String?,
-      email: map['email'] as String?,
-      address: map['address'] as String?,
-      gstin: map['gstin'] as String?,
-      balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      bookId: (map['bookId'] as String?) ?? '',
-    );
-  }
+  factory Supplier.fromMap(Map<String, dynamic> map) => Supplier(
+        id: map['id'] as String,
+        name: map['name'] as String,
+        phone: map['phone'] as String?,
+        email: map['email'] as String?,
+        address: map['address'] as String?,
+        gstin: map['gstin'] as String?,
+        balance: (map['balance'] as num?)?.toDouble() ?? 0.0,
+        createdAt: DateTime.parse(map['createdAt'] as String),
+        bookId: (map['bookId'] as String?) ?? '',
+      );
 
   factory Supplier.fromJson(Map<String, dynamic> json) =>
       Supplier.fromMap(json);
@@ -535,6 +517,13 @@ class Item {
   final DateTime createdAt;
   final String bookId;
 
+  // ── Extended fields used by items_screen ──────────────────────────────────
+  final bool isService;
+  final String? hsnCode;
+  final double gstRate;
+  final double lowStockThreshold;
+  final String? imagePath;
+
   const Item({
     required this.id,
     required this.name,
@@ -546,7 +535,16 @@ class Item {
     this.description,
     required this.createdAt,
     this.bookId = '',
+    this.isService = false,
+    this.hsnCode,
+    this.gstRate = 0,
+    this.lowStockThreshold = 5,
+    this.imagePath,
   });
+
+  /// True when stock is tracked and has fallen below [lowStockThreshold].
+  bool get isLowStock =>
+      !isService && stock != null && stock! <= lowStockThreshold;
 
   Item copyWith({
     String? id,
@@ -559,6 +557,13 @@ class Item {
     String? description,
     DateTime? createdAt,
     String? bookId,
+    bool? isService,
+    String? hsnCode,
+    double? gstRate,
+    double? lowStockThreshold,
+    String? imagePath,
+    // Pass clearImage: true to explicitly set imagePath → null
+    bool clearImage = false,
   }) {
     return Item(
       id: id ?? this.id,
@@ -571,43 +576,55 @@ class Item {
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       bookId: bookId ?? this.bookId,
+      isService: isService ?? this.isService,
+      hsnCode: hsnCode ?? this.hsnCode,
+      gstRate: gstRate ?? this.gstRate,
+      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
+      imagePath: clearImage ? null : (imagePath ?? this.imagePath),
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'salePrice': salePrice,
-      'purchasePrice': purchasePrice,
-      'stock': stock,
-      'unit': unit.name,
-      'category': category,
-      'description': description,
-      'createdAt': createdAt.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'salePrice': salePrice,
+        'purchasePrice': purchasePrice,
+        'stock': stock,
+        'unit': unit.name,
+        'category': category,
+        'description': description,
+        'createdAt': createdAt.toIso8601String(),
+        'bookId': bookId,
+        'isService': isService ? 1 : 0,
+        'hsnCode': hsnCode,
+        'gstRate': gstRate,
+        'lowStockThreshold': lowStockThreshold,
+        'imagePath': imagePath,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
-  factory Item.fromMap(Map<String, dynamic> map) {
-    return Item(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      salePrice: (map['salePrice'] as num).toDouble(),
-      purchasePrice: (map['purchasePrice'] as num?)?.toDouble(),
-      stock: (map['stock'] as num?)?.toDouble(),
-      unit: ItemUnit.values.firstWhere(
-        (e) => e.name == map['unit'],
-        orElse: () => ItemUnit.piece,
-      ),
-      category: map['category'] as String?,
-      description: map['description'] as String?,
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      bookId: (map['bookId'] as String?) ?? '',
-    );
-  }
+  factory Item.fromMap(Map<String, dynamic> map) => Item(
+        id: map['id'] as String,
+        name: map['name'] as String,
+        salePrice: (map['salePrice'] as num).toDouble(),
+        purchasePrice: (map['purchasePrice'] as num?)?.toDouble(),
+        stock: (map['stock'] as num?)?.toDouble(),
+        unit: ItemUnit.values.firstWhere(
+          (e) => e.name == map['unit'],
+          orElse: () => ItemUnit.piece,
+        ),
+        category: map['category'] as String?,
+        description: map['description'] as String?,
+        createdAt: DateTime.parse(map['createdAt'] as String),
+        bookId: (map['bookId'] as String?) ?? '',
+        isService: ((map['isService'] as int?) ?? 0) == 1,
+        hsnCode: map['hsnCode'] as String?,
+        gstRate: (map['gstRate'] as num?)?.toDouble() ?? 0,
+        lowStockThreshold:
+            (map['lowStockThreshold'] as num?)?.toDouble() ?? 5,
+        imagePath: map['imagePath'] as String?,
+      );
 
   factory Item.fromJson(Map<String, dynamic> json) => Item.fromMap(json);
 }
@@ -664,35 +681,31 @@ class BillItem {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'billId': billId,
-      'itemId': itemId,
-      'itemName': itemName,
-      'quantity': quantity,
-      'rate': rate,
-      'discount': discount,
-      'taxPercent': taxPercent,
-      'total': total,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'billId': billId,
+        'itemId': itemId,
+        'itemName': itemName,
+        'quantity': quantity,
+        'rate': rate,
+        'discount': discount,
+        'taxPercent': taxPercent,
+        'total': total,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
-  factory BillItem.fromMap(Map<String, dynamic> map) {
-    return BillItem(
-      id: map['id'] as String,
-      billId: map['billId'] as String,
-      itemId: map['itemId'] as String,
-      itemName: map['itemName'] as String,
-      quantity: (map['quantity'] as num).toDouble(),
-      rate: (map['rate'] as num).toDouble(),
-      discount: (map['discount'] as num?)?.toDouble() ?? 0,
-      taxPercent: (map['taxPercent'] as num?)?.toDouble() ?? 0,
-      total: (map['total'] as num).toDouble(),
-    );
-  }
+  factory BillItem.fromMap(Map<String, dynamic> map) => BillItem(
+        id: map['id'] as String,
+        billId: map['billId'] as String,
+        itemId: map['itemId'] as String,
+        itemName: map['itemName'] as String,
+        quantity: (map['quantity'] as num).toDouble(),
+        rate: (map['rate'] as num).toDouble(),
+        discount: (map['discount'] as num?)?.toDouble() ?? 0,
+        taxPercent: (map['taxPercent'] as num?)?.toDouble() ?? 0,
+        total: (map['total'] as num).toDouble(),
+      );
 
   factory BillItem.fromJson(Map<String, dynamic> json) =>
       BillItem.fromMap(json);
@@ -783,25 +796,23 @@ class Bill {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'billNumber': billNumber,
-      'billType': billType.name,
-      'status': status.name,
-      'partyId': partyId,
-      'partyName': partyName,
-      'subtotal': subtotal,
-      'discountTotal': discountTotal,
-      'taxTotal': taxTotal,
-      'grandTotal': grandTotal,
-      'paidAmount': paidAmount,
-      'notes': notes,
-      'date': date.toIso8601String(),
-      'createdAt': createdAt.toIso8601String(),
-      'bookId': bookId,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'billNumber': billNumber,
+        'billType': billType.name,
+        'status': status.name,
+        'partyId': partyId,
+        'partyName': partyName,
+        'subtotal': subtotal,
+        'discountTotal': discountTotal,
+        'taxTotal': taxTotal,
+        'grandTotal': grandTotal,
+        'paidAmount': paidAmount,
+        'notes': notes,
+        'date': date.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
+        'bookId': bookId,
+      };
 
   Map<String, dynamic> toJson() => toMap();
 
