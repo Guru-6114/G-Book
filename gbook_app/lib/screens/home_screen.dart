@@ -17,12 +17,12 @@ import '../models/models.dart';
 import 'cashbook_screen.dart';
 import 'items_screen.dart';
 import 'more_screen.dart';
+import 'sales_report_screen.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:open_file/open_file.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,7 +34,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
   int _billsInitialSubTab = 0;
-  // Track whether current tab was navigated from More screen
   bool _fromMore = false;
 
   void _switchTab(int index, {int? billSubTab, bool fromMore = false}) {
@@ -66,13 +65,15 @@ class _HomeScreenState extends State<HomeScreen> {
             onBackToMore: _goBackToMore,
           ),
           _BillsScreen(
-            key: ValueKey('bills_${_billsInitialSubTab}_${_tab == 1 && _fromMore}'),
+            key: ValueKey(
+                'bills_${_billsInitialSubTab}_${_tab == 1 && _fromMore}'),
             initialSubTab: _billsInitialSubTab,
             fromMore: _tab == 1 && _fromMore,
             onGoToReports: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ReportsScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const ReportsScreen()),
               );
             },
             onBackToMore: _goBackToMore,
@@ -85,7 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
             onNavigateToTab: (index) =>
                 _switchTab(index, fromMore: true),
             onNavigateToTabWithSubTab: (index, {billSubTab}) =>
-                _switchTab(index, billSubTab: billSubTab, fromMore: true),
+                _switchTab(index,
+                    billSubTab: billSubTab, fromMore: true),
           ),
         ],
       ),
@@ -191,6 +193,28 @@ class _BillsScreenState extends State<_BillsScreen>
     }
   }
 
+  String get _addBillLabel {
+    switch (_tabs.index) {
+      case 1:
+        return 'ADD PURCHASE';
+      case 2:
+        return 'ADD EXPENSE';
+      default:
+        return 'ADD BILL';
+    }
+  }
+
+  IconData get _addBillIcon {
+    switch (_tabs.index) {
+      case 1:
+        return Icons.shopping_cart_outlined;
+      case 2:
+        return Icons.payments_outlined;
+      default:
+        return Icons.receipt_long;
+    }
+  }
+
   void _openAddBill(BillType type) async {
     bool? result;
     if (type == BillType.expense) {
@@ -201,7 +225,8 @@ class _BillsScreenState extends State<_BillsScreen>
     } else {
       result = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(builder: (_) => AddBillScreen(billType: type)),
+        MaterialPageRoute(
+            builder: (_) => AddBillScreen(billType: type)),
       );
     }
     if (result == true && mounted) {
@@ -214,8 +239,9 @@ class _BillsScreenState extends State<_BillsScreen>
     final sourceType = returnType == BillType.saleReturn
         ? BillType.sale
         : BillType.purchase;
-    final sourceBills =
-        billProvider.bills.where((b) => b.billType == sourceType).toList();
+    final sourceBills = billProvider.bills
+        .where((b) => b.billType == sourceType)
+        .toList();
 
     if (sourceBills.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -306,9 +332,10 @@ class _BillsScreenState extends State<_BillsScreen>
     final auth = context.watch<AuthProvider>();
 
     final tabTypes = _currentTabBillTypes;
-    final allTabBills =
-        billProvider.bills.where((b) => tabTypes.contains(b.billType)).toList()
-          ..sort((a, b) => b.date.compareTo(a.date));
+    final allTabBills = billProvider.bills
+        .where((b) => tabTypes.contains(b.billType))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
     final filteredBills = _query.isEmpty
         ? allTabBills
         : allTabBills
@@ -356,6 +383,16 @@ class _BillsScreenState extends State<_BillsScreen>
             onSettings: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+            onMonthlySalesTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const SalesReportScreen(isSales: true)),
+            ),
+            onMonthlyPurchasesTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const SalesReportScreen(isSales: false)),
             ),
           ),
           Container(
@@ -475,8 +512,7 @@ class _BillsScreenState extends State<_BillsScreen>
                             )),
                         Text('Payment & Return',
                             style: TextStyle(
-                                color: AppTheme.primaryColor,
-                                fontSize: 10)),
+                                color: AppTheme.primaryColor, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -486,12 +522,14 @@ class _BillsScreenState extends State<_BillsScreen>
                   flex: 2,
                   child: ElevatedButton.icon(
                     onPressed: () => _openAddBill(_currentBillType),
-                    icon: const Icon(Icons.receipt_long, size: 18),
-                    label: const Text('ADD BILL',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            letterSpacing: 1)),
+                    icon: Icon(_addBillIcon, size: 18),
+                    label: Text(
+                      _addBillLabel,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          letterSpacing: 1),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryColor,
                       foregroundColor: Colors.white,
@@ -524,6 +562,8 @@ class _BillsHeader extends StatelessWidget {
   final VoidCallback onViewReports;
   final VoidCallback onCashbook;
   final VoidCallback onSettings;
+  final VoidCallback onMonthlySalesTap;
+  final VoidCallback onMonthlyPurchasesTap;
 
   const _BillsHeader({
     required this.businessName,
@@ -537,25 +577,28 @@ class _BillsHeader extends StatelessWidget {
     required this.onViewReports,
     required this.onCashbook,
     required this.onSettings,
+    required this.onMonthlySalesTap,
+    required this.onMonthlyPurchasesTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: AppTheme.primaryColor,
-      padding: EdgeInsets.fromLTRB(14, MediaQuery.of(context).padding.top + 8, 14, 12),
+      padding: EdgeInsets.fromLTRB(
+          14, MediaQuery.of(context).padding.top + 8, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              // Back arrow when navigated from More
               if (fromMore) ...[
                 GestureDetector(
                   onTap: onBackToMore,
                   child: const Padding(
                     padding: EdgeInsets.only(right: 8),
-                    child: Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                    child: Icon(Icons.arrow_back,
+                        color: Colors.white, size: 22),
                   ),
                 ),
               ],
@@ -609,8 +652,8 @@ class _BillsHeader extends StatelessWidget {
               GestureDetector(
                 onTap: onSettings,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -633,18 +676,26 @@ class _BillsHeader extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _StatBox(
-                  amount: monthlySales,
-                  label: 'Monthly Sales',
-                  amountColor: const Color(0xFF4ADE80),
+                child: GestureDetector(
+                  onTap: onMonthlySalesTap,
+                  child: _StatBox(
+                    amount: monthlySales,
+                    label: 'Monthly Sales',
+                    amountColor: const Color(0xFF4ADE80),
+                    hasChevron: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _StatBox(
-                  amount: monthlyPurchases,
-                  label: 'Monthly Purchases',
-                  amountColor: const Color(0xFFFCA5A5),
+                child: GestureDetector(
+                  onTap: onMonthlyPurchasesTap,
+                  child: _StatBox(
+                    amount: monthlyPurchases,
+                    label: 'Monthly Purchases',
+                    amountColor: const Color(0xFFFCA5A5),
+                    hasChevron: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -708,9 +759,7 @@ class _BillsHeader extends StatelessWidget {
                   ),
                 ),
                 Container(
-                    width: 1,
-                    height: 28,
-                    color: const Color(0xFFE0E0E0)),
+                    width: 1, height: 28, color: const Color(0xFFE0E0E0)),
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 14),
@@ -759,11 +808,13 @@ class _StatBox extends StatelessWidget {
   final double amount;
   final String label;
   final Color amountColor;
+  final bool hasChevron;
 
   const _StatBox({
     required this.amount,
     required this.label,
     required this.amountColor,
+    this.hasChevron = false,
   });
 
   @override
@@ -903,16 +954,14 @@ class _BillTile extends StatelessWidget {
                         ),
                         child: Text(bill.billNumber,
                             style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF616161))),
+                                fontSize: 11, color: Color(0xFF616161))),
                       ),
                       if (bill.partyName != null) ...[
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(bill.partyName!,
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF9E9E9E)),
+                                  fontSize: 11, color: Color(0xFF9E9E9E)),
                               overflow: TextOverflow.ellipsis),
                         ),
                       ],
@@ -979,7 +1028,9 @@ class _SelectBillSheetState extends State<_SelectBillSheet> {
         ? widget.bills
         : widget.bills
             .where((b) =>
-                b.billNumber.toLowerCase().contains(_query.toLowerCase()) ||
+                b.billNumber
+                    .toLowerCase()
+                    .contains(_query.toLowerCase()) ||
                 (b.partyName ?? '')
                     .toLowerCase()
                     .contains(_query.toLowerCase()))
@@ -1019,7 +1070,8 @@ class _SelectBillSheetState extends State<_SelectBillSheet> {
                 filled: true,
                 fillColor: const Color(0xFFF5F5F5),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
@@ -1056,7 +1108,8 @@ class _SelectBillSheetState extends State<_SelectBillSheet> {
                         ),
                         title: Text(bill.billNumber,
                             style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 14)),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
                         subtitle: Text(
                           '${bill.partyName ?? 'No party'} • ${AppHelpers.formatDate(bill.date)}',
                           style: const TextStyle(fontSize: 12),
@@ -1152,7 +1205,9 @@ class BillDetailScreen extends StatelessWidget {
         title: Text(
           bill.billNumber,
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 17),
         ),
         actions: [
           IconButton(
@@ -1290,7 +1345,6 @@ class BillDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-
           if (bill.billType == BillType.sale ||
               bill.billType == BillType.purchase) ...[
             Container(
@@ -1330,35 +1384,6 @@ class BillDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
-
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFE0E0E0)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Linked transactions;',
-                    style:
-                        TextStyle(fontSize: 13, color: Color(0xFF757575))),
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: () {},
-                  child: Text(
-                    'PAYMENT IN #1',
-                    style: TextStyle(
-                        color: _headerColor,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -1417,7 +1442,8 @@ class BillDetailScreen extends StatelessWidget {
                     children: [
                       _TotalRow(
                           label: 'Net Amount',
-                          value: '₹ ${bill.subtotal.toStringAsFixed(0)}'),
+                          value:
+                              '₹ ${bill.subtotal.toStringAsFixed(0)}'),
                       const SizedBox(height: 6),
                       _TotalRow(
                           label: 'Taxes',
@@ -1425,7 +1451,8 @@ class BillDetailScreen extends StatelessWidget {
                               '₹ ${bill.taxTotal.toStringAsFixed(0)}'),
                       const Divider(height: 16),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Gross Amount',
                               style: TextStyle(
@@ -1479,8 +1506,7 @@ class BillDetailScreen extends StatelessWidget {
       bottomNavigationBar: SafeArea(
         child: Container(
           color: Colors.white,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: OutlinedButton.icon(
             onPressed: () => _openViewPdf(context),
             icon: Icon(Icons.picture_as_pdf_outlined, color: _headerColor),
@@ -1524,7 +1550,8 @@ class BillDetailScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BillPdfScreen(bill: bill, headerColor: _headerColor),
+        builder: (_) =>
+            BillPdfScreen(bill: bill, headerColor: _headerColor),
       ),
     );
   }
@@ -1541,8 +1568,8 @@ class _TotalRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style: const TextStyle(
-                fontSize: 13, color: Color(0xFF757575))),
+            style:
+                const TextStyle(fontSize: 13, color: Color(0xFF757575))),
         Text(value,
             style: const TextStyle(
                 fontSize: 13,
@@ -1591,9 +1618,8 @@ class _EmptyBills extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Tap ADD BILL below to create your first ${labels[tabIndex].toLowerCase()}',
-              style:
-                  const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
+              'Tap the button below to create your first ${labels[tabIndex].toLowerCase()}',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
               textAlign: TextAlign.center,
             ),
           ),
@@ -1633,8 +1659,7 @@ class _MoreOptionsSheet extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color:
-                        AppTheme.primaryColor.withValues(alpha: 0.1),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(o.$2,
@@ -1769,7 +1794,8 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => _ItemSearchSheet(
         availableItems: itemProvider.items,
         selectedItems: _items,
@@ -1788,7 +1814,8 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => _AdditionalChargesSheet(
         charges: _charges,
         onSave: () => setState(() {}),
@@ -1801,7 +1828,8 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          borderRadius:
+              BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => _AddDiscountSheet(
         discountType: _discountType,
         discountCtrl: _discountCtrl,
@@ -1882,7 +1910,9 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
         title: Text(
           'Add $_typeLabel',
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 17),
         ),
         elevation: 0,
       ),
@@ -1915,8 +1945,7 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                                       fontWeight: FontWeight.w700,
                                       color: Color(0xFF212121))),
                               const SizedBox(width: 4),
-                              Icon(Icons.edit,
-                                  size: 14, color: _headerColor),
+                              Icon(Icons.edit, size: 14, color: _headerColor),
                             ],
                           ),
                         ],
@@ -1943,8 +1972,7 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                border:
-                                    Border.all(color: _headerColor),
+                                border: Border.all(color: _headerColor),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Row(
@@ -1968,7 +1996,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                     ],
                   ),
                 ),
-
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 12),
@@ -1987,8 +2014,7 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                           children: [
                             const Text('Add Invoice Details',
                                 style: TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF9E9E9E))),
+                                    fontSize: 13, color: Color(0xFF9E9E9E))),
                             Text(
                               '${widget.originalBill.billNumber} , Date ${AppHelpers.formatDate(widget.originalBill.date)}',
                               style: const TextStyle(
@@ -2002,7 +2028,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                     ],
                   ),
                 ),
-
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
                   child: Text(
@@ -2011,13 +2036,11 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                         fontSize: 13, color: Color(0xFF757575)),
                   ),
                 ),
-
                 ..._items.map((row) => _ReturnItemTile(
                       row: row,
                       headerColor: _headerColor,
                       onChanged: () => setState(() {}),
                     )),
-
                 InkWell(
                   onTap: _openItemSearch,
                   child: Container(
@@ -2049,7 +2072,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                     ),
                   ),
                 ),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 14),
@@ -2070,7 +2092,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                   ),
                 ),
                 const Divider(height: 1),
-
                 InkWell(
                   onTap: _showAdditionalCharges,
                   child: Padding(
@@ -2099,7 +2120,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                   ),
                 ),
                 const Divider(height: 1),
-
                 InkWell(
                   onTap: _showAddDiscount,
                   child: Padding(
@@ -2130,7 +2150,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                   ),
                 ),
                 const Divider(height: 1),
-
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 16),
@@ -2152,12 +2171,10 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                     ],
                   ),
                 ),
-
                 CustomPaint(
                   size: const Size(double.infinity, 12),
                   painter: _WavyDividerPainter(),
                 ),
-
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -2192,7 +2209,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
                   ),
                 ),
                 const Divider(height: 1),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 12),
@@ -2214,7 +2230,6 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
               ],
             ),
           ),
-
           Container(
             padding: EdgeInsets.only(
               left: 16,
@@ -2348,8 +2363,8 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
           Container(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             decoration: const BoxDecoration(
-              border: Border(
-                  bottom: BorderSide(color: Color(0xFFE0E0E0))),
+              border:
+                  Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
             ),
             child: Column(
               children: [
@@ -2396,10 +2411,8 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
           Expanded(
             child: _filteredItems.isEmpty
                 ? Center(
-                    child: Text(
-                      'No items found',
-                      style: TextStyle(color: Colors.grey.shade500),
-                    ),
+                    child: Text('No items found',
+                        style: TextStyle(color: Colors.grey.shade500)),
                   )
                 : ListView.separated(
                     controller: scrollCtrl,
@@ -2452,9 +2465,10 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
                                     icon: const Icon(Icons.remove_circle,
                                         color: Colors.red, size: 22),
                                     onPressed: () {
-                                      final qty = double.tryParse(
-                                              row.qtyCtrl.text) ??
-                                          1;
+                                      final qty =
+                                          double.tryParse(
+                                                  row.qtyCtrl.text) ??
+                                              1;
                                       if (qty <= 1) {
                                         _removeItem(item);
                                       } else {
@@ -2475,9 +2489,10 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
                                         color: widget.headerColor,
                                         size: 22),
                                     onPressed: () {
-                                      final qty = double.tryParse(
-                                              row.qtyCtrl.text) ??
-                                          1;
+                                      final qty =
+                                          double.tryParse(
+                                                  row.qtyCtrl.text) ??
+                                              1;
                                       row.qtyCtrl.text =
                                           (qty + 1).toStringAsFixed(0);
                                       setState(() {});
@@ -2495,8 +2510,9 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
                                   shape: RoundedRectangleBorder(
                                       borderRadius:
                                           BorderRadius.circular(6)),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 8),
+                                  padding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 20, vertical: 8),
                                 ),
                                 child: const Text('ADD',
                                     style: TextStyle(
@@ -2517,7 +2533,8 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
             ),
             decoration: const BoxDecoration(
               color: Colors.white,
-              border: Border(top: BorderSide(color: Color(0xFFE0E0E0))),
+              border:
+                  Border(top: BorderSide(color: Color(0xFFE0E0E0))),
             ),
             child: Column(
               children: [
@@ -2585,7 +2602,7 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
   }
 }
 
-// ── Additional Charges sheet ──────────────────────────────────────────────────
+// ── Additional Charges ────────────────────────────────────────────────────────
 class _AdditionalCharge {
   final TextEditingController nameCtrl = TextEditingController();
   final TextEditingController amountCtrl = TextEditingController();
@@ -2619,11 +2636,11 @@ class _AdditionalChargesSheetState
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Additional Charges',
+              children: const [
+                Text('Additional Charges',
                     style: TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w700)),
-                const Text(
+                Text(
                   'Add upto 3 types (Eg- Shipping Charges, Packaging Charges etc)',
                   style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
                 ),
@@ -2634,8 +2651,8 @@ class _AdditionalChargesSheetState
           ...widget.charges.asMap().entries.map((e) {
             final charge = e.value;
             return Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 6),
               child: Row(
                 children: [
                   Checkbox(
@@ -2676,14 +2693,15 @@ class _AdditionalChargesSheetState
           }),
           if (widget.charges.length < 3)
             InkWell(
-              onTap: () =>
-                  setState(() => widget.charges.add(_AdditionalCharge())),
+              onTap: () => setState(
+                  () => widget.charges.add(_AdditionalCharge())),
               child: const Padding(
                 padding:
                     EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
                   children: [
-                    Icon(Icons.add, color: AppTheme.primaryColor, size: 18),
+                    Icon(Icons.add,
+                        color: AppTheme.primaryColor, size: 18),
                     SizedBox(width: 6),
                     Text('ADD NEW CHARGE',
                         style: TextStyle(
@@ -2728,7 +2746,7 @@ class _AdditionalChargesSheetState
   }
 }
 
-// ── Add Discount sheet ────────────────────────────────────────────────────────
+// ── Add Discount Sheet ────────────────────────────────────────────────────────
 class _AddDiscountSheet extends StatefulWidget {
   final String discountType;
   final TextEditingController discountCtrl;
@@ -2779,8 +2797,10 @@ class _AddDiscountSheetState extends State<_AddDiscountSheet> {
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Text('Enter the discount to be applied on this Sale',
-                style: TextStyle(fontSize: 13, color: Color(0xFF9E9E9E))),
+            child: Text(
+                'Enter the discount to be applied on this Sale',
+                style:
+                    TextStyle(fontSize: 13, color: Color(0xFF9E9E9E))),
           ),
           const SizedBox(height: 16),
           Padding(
@@ -2892,7 +2912,8 @@ class _ReturnItemTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
+        border:
+            Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
       ),
       child: Row(
         children: [
@@ -2961,8 +2982,8 @@ class _RefundModeOption extends StatelessWidget {
                     child: Container(
                       width: 9,
                       height: 9,
-                      decoration:
-                          BoxDecoration(shape: BoxShape.circle, color: color),
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle, color: color),
                     ),
                   )
                 : null,
@@ -2973,8 +2994,9 @@ class _RefundModeOption extends StatelessWidget {
             style: TextStyle(
                 fontSize: 13,
                 color: isSelected ? color : const Color(0xFF424242),
-                fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.normal),
+                fontWeight: isSelected
+                    ? FontWeight.w600
+                    : FontWeight.normal),
           ),
         ],
       ),
@@ -2995,8 +3017,10 @@ class _WavyDividerPainter extends CustomPainter {
     const waveWidth = 12.0;
     const waveHeight = 4.0;
     while (x < size.width) {
-      path.relativeQuadraticBezierTo(waveWidth / 2, -waveHeight, waveWidth, 0);
-      path.relativeQuadraticBezierTo(waveWidth / 2, waveHeight, waveWidth, 0);
+      path.relativeQuadraticBezierTo(
+          waveWidth / 2, -waveHeight, waveWidth, 0);
+      path.relativeQuadraticBezierTo(
+          waveWidth / 2, waveHeight, waveWidth, 0);
       x += waveWidth * 2;
     }
     canvas.drawPath(path, paint);
@@ -3007,38 +3031,23 @@ class _WavyDividerPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// THEME COLOR OPTIONS
+// BILL PDF SCREEN — with Premium / Thermal / Basic format tabs
 // ══════════════════════════════════════════════════════════════════════════════
-const List<Map<String, dynamic>> _kThemeColors = [
-  {'name': 'Blue', 'color': Color(0xFF1565C0)},
-  {'name': 'Red', 'color': Color(0xFFB71C1C)},
-  {'name': 'Green', 'color': Color(0xFF2E7D32)},
-  {'name': 'Purple', 'color': Color(0xFF6A1B9A)},
-  {'name': 'Orange', 'color': Color(0xFFE65100)},
-  {'name': 'Teal', 'color': Color(0xFF00695C)},
-  {'name': 'Pink', 'color': Color(0xFFAD1457)},
-  {'name': 'Dark', 'color': Color(0xFF212121)},
-];
+enum _InvoiceFormat { premium, thermal, basic }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// BILL PDF SCREEN — Khatabook style
-// ══════════════════════════════════════════════════════════════════════════════
 class BillPdfScreen extends StatefulWidget {
   final Bill bill;
   final Color headerColor;
 
-  const BillPdfScreen({
-    super.key,
-    required this.bill,
-    required this.headerColor,
-  });
+  const BillPdfScreen(
+      {super.key, required this.bill, required this.headerColor});
 
   @override
   State<BillPdfScreen> createState() => _BillPdfScreenState();
 }
 
 class _BillPdfScreenState extends State<BillPdfScreen> {
-  String _selectedFormat = 'Premium';
+  _InvoiceFormat _format = _InvoiceFormat.premium;
   late Color _themeColor;
   bool _isDownloading = false;
   bool _isSharing = false;
@@ -3048,6 +3057,9 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     super.initState();
     _themeColor = widget.headerColor;
   }
+
+  // ── PDF amount — Rs. not ₹ (base-14 fonts lack the glyph) ─────────────────
+  String _pdfAmt(num v) => 'Rs. ${v.toStringAsFixed(0)}';
 
   void _openThemePicker() {
     showModalBottomSheet(
@@ -3065,35 +3077,47 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     );
   }
 
+  // ── Generate PDF bytes based on selected format ────────────────────────────
   Future<Uint8List> _generatePdfBytes(dynamic profile) async {
+    switch (_format) {
+      case _InvoiceFormat.thermal:
+        return _buildThermalPdf(profile);
+      case _InvoiceFormat.basic:
+        return _buildBasicPdf(profile);
+      case _InvoiceFormat.premium:
+      default:
+        return _buildPremiumPdf(profile);
+    }
+  }
+
+  // ── PREMIUM format (full A4 — landscape table with logo) ───────────────────
+  Future<Uint8List> _buildPremiumPdf(dynamic profile) async {
     final pdf = pw.Document();
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
     final phone = profile?.phone ?? '';
     final bill = widget.bill;
     final isPaid = bill.isPaid;
-
     final pdfColor = PdfColor(
       _themeColor.red / 255,
       _themeColor.green / 255,
       _themeColor.blue / 255,
     );
-    final pdfGreen = PdfColor(0.18, 0.49, 0.20);
+    const pdfGreen = PdfColor.fromInt(0xFF2E7D32);
 
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
+        build: (pw.Context ctx) {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              // Top colour bar
               pw.Container(
-                width: double.infinity,
-                height: 6,
-                color: pdfColor,
-              ),
+                  width: double.infinity, height: 6, color: pdfColor),
               pw.SizedBox(height: 16),
+              // Business header + invoice info
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
@@ -3107,10 +3131,9 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                             ? businessName[0].toUpperCase()
                             : 'M',
                         style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 20,
-                        ),
+                            color: PdfColors.white,
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 20),
                       ),
                     ),
                   ),
@@ -3126,13 +3149,11 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                         if (address.isNotEmpty)
                           pw.Text(address,
                               style: const pw.TextStyle(
-                                  fontSize: 10,
-                                  color: PdfColors.grey700)),
+                                  fontSize: 10, color: PdfColors.grey700)),
                         if (phone.isNotEmpty)
                           pw.Text('Phone: $phone',
                               style: const pw.TextStyle(
-                                  fontSize: 10,
-                                  color: PdfColors.grey700)),
+                                  fontSize: 10, color: PdfColors.grey700)),
                       ],
                     ),
                   ),
@@ -3147,41 +3168,16 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                       pw.Text(
                           'Date: ${AppHelpers.formatDate(bill.date)}',
                           style: const pw.TextStyle(
-                              fontSize: 10,
-                              color: PdfColors.grey700)),
+                              fontSize: 10, color: PdfColors.grey700)),
                     ],
                   ),
                 ],
               ),
               pw.SizedBox(height: 16),
-              pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Expanded(
-                    child: pw.Container(
-                      padding: const pw.EdgeInsets.all(10),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: PdfColors.grey300),
-                      ),
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text('Bill To',
-                              style: const pw.TextStyle(
-                                  fontSize: 10,
-                                  color: PdfColors.grey600)),
-                          pw.Text(
-                            bill.partyName ?? '— —',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (isPaid) ...[
-                    pw.SizedBox(width: 16),
+              if (isPaid)
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.end,
+                  children: [
                     pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
@@ -3189,8 +3185,7 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                           padding: const pw.EdgeInsets.symmetric(
                               horizontal: 14, vertical: 8),
                           decoration: pw.BoxDecoration(
-                            border: pw.Border.all(
-                                color: pdfGreen, width: 2),
+                            border: pw.Border.all(color: pdfGreen, width: 2),
                           ),
                           child: pw.Column(
                             children: [
@@ -3198,242 +3193,476 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                                   style: pw.TextStyle(
                                       color: pdfGreen,
                                       fontSize: 8,
-                                      fontWeight: pw.FontWeight.bold,
-                                      letterSpacing: 1)),
+                                      fontWeight: pw.FontWeight.bold)),
                               pw.Text('PAID',
                                   style: pw.TextStyle(
                                       color: pdfGreen,
                                       fontSize: 20,
-                                      fontWeight: pw.FontWeight.bold,
-                                      letterSpacing: 2)),
+                                      fontWeight: pw.FontWeight.bold)),
                             ],
                           ),
                         ),
                         pw.SizedBox(height: 4),
-                        pw.Text('Total amount',
-                            style: const pw.TextStyle(
-                                fontSize: 10,
-                                color: PdfColors.grey600)),
-                        pw.Text(
-                          bill.grandTotal.toStringAsFixed(0),
-                          style: pw.TextStyle(
-                              fontSize: 24,
-                              fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.Text(
-                          _amountInWords(bill.grandTotal),
-                          style: const pw.TextStyle(
-                              fontSize: 9,
-                              color: PdfColors.grey600),
-                        ),
+                        pw.Text('Total: ${_pdfAmt(bill.grandTotal)}',
+                            style: pw.TextStyle(
+                                fontSize: 16,
+                                fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                   ],
-                ],
-              ),
-              pw.SizedBox(height: 16),
+                ),
+              pw.SizedBox(height: 12),
+              // Items table
               pw.Container(
                 color: PdfColors.grey100,
                 padding: const pw.EdgeInsets.symmetric(
                     horizontal: 8, vertical: 6),
-                child: pw.Row(
-                  children: [
-                    pw.SizedBox(
-                        width: 24,
-                        child: pw.Text('#',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                    pw.Expanded(
-                        flex: 3,
-                        child: pw.Text('Item Details',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                    pw.SizedBox(
-                        width: 60,
-                        child: pw.Text('Price/Unit',
-                            textAlign: pw.TextAlign.center,
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                    pw.SizedBox(
-                        width: 40,
-                        child: pw.Text('Qty',
-                            textAlign: pw.TextAlign.center,
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                    pw.SizedBox(
-                        width: 60,
-                        child: pw.Text('Total',
-                            textAlign: pw.TextAlign.right,
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                  ],
-                ),
+                child: pw.Row(children: [
+                  pw.SizedBox(
+                      width: 24,
+                      child: pw.Text('#',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10))),
+                  pw.Expanded(
+                      flex: 3,
+                      child: pw.Text('Item Details',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10))),
+                  pw.SizedBox(
+                      width: 60,
+                      child: pw.Text('Price/Unit',
+                          textAlign: pw.TextAlign.center,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10))),
+                  pw.SizedBox(
+                      width: 40,
+                      child: pw.Text('Qty',
+                          textAlign: pw.TextAlign.center,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10))),
+                  pw.SizedBox(
+                      width: 70,
+                      child: pw.Text('Total',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10))),
+                ]),
               ),
               ...bill.items.asMap().entries.map((e) {
                 final idx = e.key + 1;
                 final item = e.value;
                 return pw.Container(
                   decoration: const pw.BoxDecoration(
-                    border: pw.Border(
-                        bottom: pw.BorderSide(
-                            color: PdfColors.grey200)),
-                  ),
+                      border: pw.Border(
+                          bottom: pw.BorderSide(
+                              color: PdfColors.grey200))),
                   padding: const pw.EdgeInsets.symmetric(
                       horizontal: 8, vertical: 7),
-                  child: pw.Row(
-                    children: [
-                      pw.SizedBox(
-                          width: 24,
-                          child: pw.Text(
-                              idx.toString().padLeft(2, '0'),
-                              style:
-                                  const pw.TextStyle(fontSize: 11))),
-                      pw.Expanded(
-                          flex: 3,
-                          child: pw.Text(item.itemName,
-                              style:
-                                  const pw.TextStyle(fontSize: 11))),
-                      pw.SizedBox(
-                          width: 60,
-                          child: pw.Text(
-                              '${item.rate.toStringAsFixed(0)}/PCS',
-                              textAlign: pw.TextAlign.center,
-                              style:
-                                  const pw.TextStyle(fontSize: 10))),
-                      pw.SizedBox(
-                          width: 40,
-                          child: pw.Text(
-                              item.quantity.toStringAsFixed(0),
-                              textAlign: pw.TextAlign.center,
-                              style:
-                                  const pw.TextStyle(fontSize: 11))),
-                      pw.SizedBox(
-                          width: 60,
-                          child: pw.Text(
-                              item.total.toStringAsFixed(0),
-                              textAlign: pw.TextAlign.right,
-                              style: pw.TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: pw.FontWeight.bold))),
-                    ],
-                  ),
-                );
-              }),
-              pw.Container(
-                color: PdfColors.grey100,
-                padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 6),
-                child: pw.Row(
-                  children: [
-                    pw.SizedBox(width: 24),
+                  child: pw.Row(children: [
+                    pw.SizedBox(
+                        width: 24,
+                        child: pw.Text(
+                            idx.toString().padLeft(2, '0'),
+                            style: const pw.TextStyle(fontSize: 11))),
                     pw.Expanded(
                         flex: 3,
-                        child: pw.Text('Sub-total Amount',
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
+                        child: pw.Text(item.itemName,
+                            style: const pw.TextStyle(fontSize: 11))),
                     pw.SizedBox(
                         width: 60,
                         child: pw.Text(
-                            bill.items
-                                .fold(0.0,
-                                    (s, i) => s + i.quantity)
-                                .toStringAsFixed(0),
+                            '${item.rate.toStringAsFixed(0)}/PCS',
                             textAlign: pw.TextAlign.center,
-                            style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                    pw.SizedBox(width: 40),
+                            style: const pw.TextStyle(fontSize: 10))),
                     pw.SizedBox(
-                        width: 60,
+                        width: 40,
                         child: pw.Text(
-                            bill.subtotal.toStringAsFixed(0),
+                            item.quantity.toStringAsFixed(0),
+                            textAlign: pw.TextAlign.center,
+                            style: const pw.TextStyle(fontSize: 11))),
+                    pw.SizedBox(
+                        width: 70,
+                        child: pw.Text(
+                            item.total.toStringAsFixed(0),
                             textAlign: pw.TextAlign.right,
                             style: pw.TextStyle(
-                                fontWeight: pw.FontWeight.bold,
-                                fontSize: 10))),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 16),
+                                fontSize: 11,
+                                fontWeight: pw.FontWeight.bold))),
+                  ]),
+                );
+              }),
+              pw.SizedBox(height: 12),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.end,
                 children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text('Total Amount',
-                          style: const pw.TextStyle(
-                              fontSize: 13,
-                              color: PdfColors.grey600)),
-                      pw.Text(
-                        bill.grandTotal.toStringAsFixed(0),
-                        style: pw.TextStyle(
-                            fontSize: 28,
-                            fontWeight: pw.FontWeight.bold),
-                      ),
-                      pw.Text(
-                        _amountInWords(bill.grandTotal),
-                        style: const pw.TextStyle(
-                            fontSize: 9,
-                            color: PdfColors.grey600),
-                      ),
-                    ],
-                  ),
+                  pw.Text('Total: ${_pdfAmt(bill.grandTotal)}',
+                      style: pw.TextStyle(
+                          fontSize: 18, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
               pw.SizedBox(height: 16),
               pw.Divider(),
-              pw.SizedBox(height: 6),
               pw.Center(
                 child: pw.Text(
                   '~ THIS IS A DIGITALLY CREATED INVOICE ~',
                   style: const pw.TextStyle(
-                      fontSize: 9,
-                      color: PdfColors.grey500,
-                      letterSpacing: 0.5),
+                      fontSize: 9, color: PdfColors.grey500),
                 ),
               ),
-              pw.SizedBox(height: 8),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.end,
-                children: [
-                  pw.Text('AUTHORISED SIGNATURE',
-                      style: const pw.TextStyle(
-                          fontSize: 9,
-                          color: PdfColors.grey600)),
-                ],
-              ),
-              pw.SizedBox(height: 12),
-              pw.Text('Thank you for the business.',
-                  style: const pw.TextStyle(
-                      fontSize: 10,
-                      color: PdfColors.grey700)),
               pw.SizedBox(height: 16),
               pw.Container(
-                width: double.infinity,
-                height: 6,
-                color: pdfColor,
+                  width: double.infinity, height: 6, color: pdfColor),
+            ],
+          );
+        },
+      ),
+    );
+    return pdf.save();
+  }
+
+  // ── THERMAL format (narrow 80mm receipt style) ─────────────────────────────
+  Future<Uint8List> _buildThermalPdf(dynamic profile) async {
+    final pdf = pw.Document();
+    final businessName = profile?.businessName ?? 'My Business';
+    final address = profile?.address ?? '';
+    final phone = profile?.phone ?? '';
+    final bill = widget.bill;
+
+    // Use narrow page (80mm wide — standard thermal receipt)
+    final thermalFormat = PdfPageFormat(
+      80 * PdfPageFormat.mm,
+      297 * PdfPageFormat.mm,
+      marginAll: 4 * PdfPageFormat.mm,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: thermalFormat,
+        build: (pw.Context ctx) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              // Business name centred
+              pw.Text(businessName.toUpperCase(),
+                  style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold, fontSize: 11),
+                  textAlign: pw.TextAlign.center),
+              if (address.isNotEmpty)
+                pw.Text(address,
+                    style: const pw.TextStyle(fontSize: 8),
+                    textAlign: pw.TextAlign.center),
+              if (phone.isNotEmpty)
+                pw.Text('PHONE: $phone',
+                    style: const pw.TextStyle(fontSize: 8),
+                    textAlign: pw.TextAlign.center),
+              pw.SizedBox(height: 6),
+              pw.Divider(),
+              pw.SizedBox(height: 4),
+              // Bill info left-aligned
+              pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text('BILL TO',
+                    style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold, fontSize: 8)),
+              ),
+              if (bill.partyName != null && bill.partyName!.isNotEmpty)
+                pw.Align(
+                  alignment: pw.Alignment.centerLeft,
+                  child: pw.Text(bill.partyName!,
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                ),
+              pw.SizedBox(height: 6),
+              pw.Divider(),
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      bill.billNumber
+                          .replaceAll(RegExp(r'[^a-zA-Z0-9 ]'), ' ')
+                          .trim(),
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                    pw.Text('Invoice Date: ${AppHelpers.formatDate(bill.date)}',
+                        style: const pw.TextStyle(fontSize: 8)),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Divider(),
+              // Column headers
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Item',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                  pw.Text('Qty',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                  pw.Text('Amount',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                ],
+              ),
+              pw.Divider(),
+              // Items
+              ...bill.items.map((item) => pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 3),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Expanded(
+                          child: pw.Text(item.itemName,
+                              style: const pw.TextStyle(fontSize: 9)),
+                        ),
+                        pw.Text(
+                            '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1).padLeft(4)}',
+                            style: const pw.TextStyle(fontSize: 9)),
+                        pw.SizedBox(width: 6),
+                        pw.Text(
+                          'Rs.${item.total.toStringAsFixed(0)}',
+                          style: const pw.TextStyle(fontSize: 9),
+                          textAlign: pw.TextAlign.right,
+                        ),
+                      ],
+                    ),
+                  )),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Item Total',
+                      style: const pw.TextStyle(fontSize: 9)),
+                  pw.Text('Rs.${bill.subtotal.toStringAsFixed(0)}',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                ],
+              ),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Net Amount',
+                      style: const pw.TextStyle(fontSize: 9)),
+                  pw.Text(bill.grandTotal.toStringAsFixed(0),
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                ],
+              ),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('RECEIVED',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                  pw.Text('Rs.${bill.paidAmount.toStringAsFixed(0)}',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                ],
+              ),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Balance',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                  pw.Text(bill.balanceDue.toStringAsFixed(2),
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 9)),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(),
+              pw.Center(
+                child: pw.Text('Thank you for your business!',
+                    style: const pw.TextStyle(fontSize: 8),
+                    textAlign: pw.TextAlign.center),
               ),
             ],
           );
         },
       ),
     );
+    return pdf.save();
+  }
 
+  // ── BASIC format (simple A4 with table) ────────────────────────────────────
+  Future<Uint8List> _buildBasicPdf(dynamic profile) async {
+    final pdf = pw.Document();
+    final businessName = profile?.businessName ?? 'My Business';
+    final address = profile?.address ?? '';
+    final phone = profile?.phone ?? '';
+    final bill = widget.bill;
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        build: (pw.Context ctx) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Simple text header
+              pw.Text(businessName.toUpperCase(),
+                  style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold, fontSize: 14)),
+              if (address.isNotEmpty)
+                pw.Text(address,
+                    style: const pw.TextStyle(fontSize: 10)),
+              if (phone.isNotEmpty)
+                pw.Text('Phone: $phone',
+                    style: const pw.TextStyle(fontSize: 10)),
+              pw.Divider(),
+              pw.SizedBox(height: 6),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('BILL TO',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10)),
+                      if (bill.partyName != null &&
+                          bill.partyName!.isNotEmpty)
+                        pw.Text(bill.partyName!,
+                            style: pw.TextStyle(
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 11)),
+                      if (address.isNotEmpty)
+                        pw.Text(address,
+                            style: const pw.TextStyle(fontSize: 9)),
+                      if (phone.isNotEmpty)
+                        pw.Text('Phone: $phone',
+                            style: const pw.TextStyle(fontSize: 9)),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(bill.billNumber
+                          .replaceAll(RegExp(r'[^a-zA-Z0-9 ]'), ' ')
+                          .trim(),
+                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                          'Invoice No.${bill.billNumber.replaceAll(RegExp(r'[^0-9]'), '').trim()}',
+                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                          'Invoice Date: ${AppHelpers.formatDate(bill.date)}',
+                          style: const pw.TextStyle(fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Divider(),
+              // Table header
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Item',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                  pw.Text('Qty',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                  pw.Text('Amount',
+                      style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                ],
+              ),
+              pw.Divider(),
+              ...bill.items.map((item) => pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 5),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Expanded(
+                          child: pw.Text(item.itemName,
+                              style: const pw.TextStyle(fontSize: 11)),
+                        ),
+                        pw.Text(
+                            '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} PCS',
+                            style: const pw.TextStyle(fontSize: 11)),
+                        pw.SizedBox(width: 8),
+                        pw.Text(
+                            'Rs.${item.total.toStringAsFixed(0)}',
+                            style: const pw.TextStyle(fontSize: 11)),
+                      ],
+                    ),
+                  )),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('',
+                      style: const pw.TextStyle(fontSize: 9)),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                          'Item Total  Rs.${bill.subtotal.toStringAsFixed(0)}',
+                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                          'Net Amount  ${bill.grandTotal.toStringAsFixed(0)}',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(''),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                          'RECEIVED  Rs.${bill.paidAmount.toStringAsFixed(0)}',
+                          style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                          'Balance  ${bill.balanceDue.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                              fontWeight: pw.FontWeight.bold,
+                              fontSize: 10)),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              pw.Divider(),
+              pw.Center(
+                child: pw.Text(
+                    '~ THIS IS A DIGITALLY CREATED INVOICE ~',
+                    style: const pw.TextStyle(
+                        fontSize: 9, color: PdfColors.grey600),
+                    textAlign: pw.TextAlign.center),
+              ),
+            ],
+          );
+        },
+      ),
+    );
     return pdf.save();
   }
 
   Future<File> _savePdfToFile(dynamic profile) async {
     final bytes = await _generatePdfBytes(profile);
     final dir = await getTemporaryDirectory();
+    final suffix =
+        _format.name; // 'premium' | 'thermal' | 'basic'
     final fileName =
-        'invoice_${widget.bill.billNumber.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}.pdf';
+        'invoice_${widget.bill.billNumber.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}_$suffix.pdf';
     final file = File('${dir.path}/$fileName');
     await file.writeAsBytes(bytes);
     return file;
@@ -3444,45 +3673,11 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     setState(() => _isDownloading = true);
     try {
       final file = await _savePdfToFile(profile);
-
-      File? savedFile;
-      if (Platform.isAndroid) {
-        try {
-          final downloadsDir = Directory('/storage/emulated/0/Download');
-          if (await downloadsDir.exists()) {
-            final fileName =
-                'invoice_${widget.bill.billNumber.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}.pdf';
-            savedFile = await file.copy('${downloadsDir.path}/$fileName');
-          }
-        } catch (_) {
-          savedFile = file;
-        }
-      } else {
-        savedFile = file;
-      }
-
       if (mounted) {
-        final result = await OpenFile.open(savedFile?.path ?? file.path);
-        if (result.type != ResultType.done && mounted) {
-          await Share.shareXFiles(
-            [XFile(file.path, mimeType: 'application/pdf')],
-            subject: 'Invoice ${widget.bill.billNumber}',
-          );
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Invoice saved: ${savedFile?.path.split('/').last ?? file.path.split('/').last}'),
-              action: SnackBarAction(
-                label: 'OPEN',
-                onPressed: () =>
-                    OpenFile.open(savedFile?.path ?? file.path),
-              ),
-            ),
-          );
-        }
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/pdf')],
+          subject: 'Invoice ${widget.bill.billNumber}',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -3500,32 +3695,13 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     setState(() => _isSharing = true);
     try {
       final file = await _savePdfToFile(profile);
-
-      final whatsappUri = Uri.parse('whatsapp://send');
-      final canOpenWhatsApp = await canLaunchUrl(whatsappUri);
-
-      if (canOpenWhatsApp) {
-        await Share.shareXFiles(
-          [XFile(file.path, mimeType: 'application/pdf')],
-          subject: 'Invoice ${widget.bill.billNumber}',
-          text:
-              'Invoice ${widget.bill.billNumber} - Total: ₹${widget.bill.grandTotal.toStringAsFixed(0)}',
-        );
-      } else {
-        await Share.shareXFiles(
-          [XFile(file.path, mimeType: 'application/pdf')],
-          subject: 'Invoice ${widget.bill.billNumber}',
-          text:
-              'Invoice ${widget.bill.billNumber} - Total: ₹${widget.bill.grandTotal.toStringAsFixed(0)}',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    'WhatsApp not found. Use the share sheet to send.')),
-          );
-        }
-      }
+      if (!mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf')],
+        subject: 'Invoice ${widget.bill.billNumber}',
+        text:
+            'Invoice ${widget.bill.billNumber} - Total: ${_pdfAmt(widget.bill.grandTotal)}',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3537,19 +3713,13 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     }
   }
 
-  void _createNew(BuildContext context) {
-    Navigator.of(context).popUntil((route) {
-      return route.settings.name == '/' || route.isFirst;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final profile = auth.profile;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE0E0E0),
+      backgroundColor: const Color(0xFFE8E8E8),
       appBar: AppBar(
         backgroundColor: _themeColor,
         leading: IconButton(
@@ -3559,147 +3729,177 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
         title: Text(
           'Invoice #${widget.bill.billNumber}',
           style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 17),
         ),
         actions: [
-          TextButton.icon(
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, color: Colors.white),
             onPressed: () {},
-            icon: const Icon(Icons.edit, color: Colors.white, size: 16),
-            label: const Text('Edit',
-                style: TextStyle(color: Colors.white, fontSize: 14)),
+            tooltip: 'Edit',
           ),
         ],
         elevation: 0,
       ),
       body: Column(
         children: [
+          // ── Invoice preview ───────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: _buildInvoicePreview(profile),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+              child: _buildPreview(profile),
             ),
           ),
 
+          // ── Format selector: Premium / Thermal / Basic ─────────────────
           Container(
-            color: const Color(0xFFF5F5F5),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
               children: [
                 _FormatTab(
                   label: 'Premium',
                   isNew: true,
-                  selected: _selectedFormat == 'Premium',
-                  onTap: () => setState(() => _selectedFormat = 'Premium'),
+                  selected: _format == _InvoiceFormat.premium,
+                  onTap: () =>
+                      setState(() => _format = _InvoiceFormat.premium),
                   activeColor: _themeColor,
                 ),
                 const SizedBox(width: 10),
                 _FormatTab(
                   label: 'Thermal',
                   isNew: false,
-                  selected: _selectedFormat == 'Thermal',
-                  onTap: () => setState(() => _selectedFormat = 'Thermal'),
+                  selected: _format == _InvoiceFormat.thermal,
+                  onTap: () =>
+                      setState(() => _format = _InvoiceFormat.thermal),
                   activeColor: _themeColor,
                 ),
                 const SizedBox(width: 10),
                 _FormatTab(
                   label: 'Basic',
                   isNew: false,
-                  selected: _selectedFormat == 'Basic',
-                  onTap: () => setState(() => _selectedFormat = 'Basic'),
+                  selected: _format == _InvoiceFormat.basic,
+                  onTap: () =>
+                      setState(() => _format = _InvoiceFormat.basic),
                   activeColor: _themeColor,
                 ),
               ],
             ),
           ),
 
+          // ── Action icons row ──────────────────────────────────────────
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // Print only shown for Thermal (bluetooth printer)
+                if (_format == _InvoiceFormat.thermal)
+                  _ActionIcon(
+                    icon: Icons.print_outlined,
+                    label: 'Print',
+                    color: _themeColor,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content:
+                                Text('Bluetooth printing not available')),
+                      );
+                    },
+                  ),
+                _ActionIcon(
+                  icon: Icons.palette_outlined,
+                  label: 'Theme',
+                  color: _themeColor,
+                  onTap: _openThemePicker,
+                ),
+                _isDownloading
+                    ? _ActionIcon(
+                        icon: Icons.hourglass_top,
+                        label: 'Saving...',
+                        color: _themeColor,
+                        onTap: () {},
+                      )
+                    : _ActionIcon(
+                        icon: Icons.download_outlined,
+                        label: 'Download\nInvoice',
+                        color: _themeColor,
+                        onTap: () => _downloadInvoice(profile),
+                      ),
+                _isSharing
+                    ? _ActionIcon(
+                        icon: Icons.hourglass_top,
+                        label: 'Sharing...',
+                        color: const Color(0xFF25D366),
+                        iconColor: const Color(0xFF25D366),
+                        onTap: () {},
+                      )
+                    : _ActionIcon(
+                        icon: Icons.chat_outlined,
+                        label: 'Share on\nWhatsApp',
+                        color: const Color(0xFF25D366),
+                        iconColor: const Color(0xFF25D366),
+                        onTap: () => _shareOnWhatsApp(profile),
+                      ),
+              ],
+            ),
+          ),
+
+          // ── Bottom buttons: CREATE NEW + DONE ─────────────────────────
           Container(
             color: Colors.white,
             padding: EdgeInsets.only(
               left: 16,
               right: 16,
-              top: 12,
+              top: 8,
               bottom: MediaQuery.of(context).padding.bottom + 12,
             ),
-            child: Column(
+            child: Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _ActionIcon(
-                      icon: Icons.palette_outlined,
-                      label: 'Theme',
-                      color: _themeColor,
-                      onTap: _openThemePicker,
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      // Pop back to bills list so user can tap ADD BILL again
+                      Navigator.of(context).popUntil(
+                        (route) =>
+                            route.isFirst ||
+                            route.settings.name == '/bills',
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: _themeColor),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    _isDownloading
-                        ? _ActionIcon(
-                            icon: Icons.hourglass_top,
-                            label: 'Downloading...',
+                    child: Text('CREATE NEW',
+                        style: TextStyle(
                             color: _themeColor,
-                            onTap: () {},
-                          )
-                        : _ActionIcon(
-                            icon: Icons.download_outlined,
-                            label: 'Download\nInvoice',
-                            color: _themeColor,
-                            onTap: () => _downloadInvoice(profile),
-                          ),
-                    _isSharing
-                        ? _ActionIcon(
-                            icon: Icons.hourglass_top,
-                            label: 'Sharing...',
-                            color: const Color(0xFF25D366),
-                            iconColor: const Color(0xFF25D366),
-                            onTap: () {},
-                          )
-                        : _ActionIcon(
-                            icon: Icons.chat_outlined,
-                            label: 'Share on\nWhatsapp',
-                            color: const Color(0xFF25D366),
-                            iconColor: const Color(0xFF25D366),
-                            onTap: () => _shareOnWhatsApp(profile),
-                          ),
-                  ],
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14)),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _createNew(context),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(color: _themeColor),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: Text('CREATE NEW',
-                            style: TextStyle(
-                                color: _themeColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                letterSpacing: 1)),
-                      ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _themeColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      padding:
+                          const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _themeColor,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text('DONE',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                                letterSpacing: 1)),
-                      ),
-                    ),
-                  ],
+                    child: const Text('DONE',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14)),
+                  ),
                 ),
               ],
             ),
@@ -3709,25 +3909,22 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
     );
   }
 
-  Widget _buildInvoicePreview(dynamic profile) {
-    if (_selectedFormat == 'Premium') {
-      return _buildPremiumInvoice(profile);
-    } else if (_selectedFormat == 'Thermal') {
-      return _buildThermalInvoice(profile);
-    } else {
-      return _buildBasicInvoice(profile);
+  // ── On-screen preview — switches based on selected format ──────────────────
+  Widget _buildPreview(dynamic profile) {
+    switch (_format) {
+      case _InvoiceFormat.thermal:
+        return _buildThermalPreview(profile);
+      case _InvoiceFormat.basic:
+        return _buildBasicPreview(profile);
+      case _InvoiceFormat.premium:
+      default:
+        return _buildPremiumPreview(profile);
     }
   }
 
-  Widget _buildPremiumInvoice(dynamic profile) {
+  // PREMIUM on-screen preview
+  Widget _buildPremiumPreview(dynamic profile) {
     final businessName = profile?.businessName ?? 'My Business';
-    final address = profile?.address ?? '';
-    final phone = profile?.phone ?? '';
-    final invoiceNo = widget.bill.billNumber
-        .replaceAll(RegExp(r'[^0-9]'), '')
-        .trim();
-    final isPaid = widget.bill.isPaid;
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -3742,23 +3939,20 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-              width: double.infinity, height: 6, color: _themeColor),
+          Container(width: double.infinity, height: 6, color: _themeColor),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: _themeColor,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                          color: _themeColor,
+                          borderRadius: BorderRadius.circular(4)),
                       child: Center(
                         child: Text(
                           businessName.isNotEmpty
@@ -3773,371 +3967,124 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(businessName,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                  color: Color(0xFF212121))),
-                          if (address.isNotEmpty)
-                            Text(address,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF757575))),
-                          if (phone.isNotEmpty)
-                            Text('Phone: $phone',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF757575))),
-                        ],
-                      ),
-                    ),
+                        child: Text(businessName,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14))),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('Invoice No.$invoiceNo',
+                        Text(widget.bill.billNumber,
                             style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF212121))),
-                        Text(
-                            'Invoice Date: ${AppHelpers.formatDate(widget.bill.date)}',
+                                fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(AppHelpers.formatDate(widget.bill.date),
                             style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF757575))),
+                                fontSize: 10, color: Color(0xFF757575))),
                       ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          border:
-                              Border.all(color: const Color(0xFFE0E0E0)),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Bill To',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF9E9E9E))),
-                            Text(
-                              widget.bill.partyName ?? '— —',
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (isPaid) ...[
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                  color: const Color(0xFF2E7D32),
-                                  width: 2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Column(
-                              children: [
-                                Text('THANK YOU',
-                                    style: TextStyle(
-                                        fontSize: 8,
-                                        color: Color(0xFF2E7D32),
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1)),
-                                Text('PAID',
-                                    style: TextStyle(
-                                        fontSize: 18,
-                                        color: Color(0xFF2E7D32),
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 2)),
-                                Icon(Icons.star,
-                                    size: 10,
-                                    color: Color(0xFF2E7D32)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text('Total amount',
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF757575))),
-                          Text(
-                            widget.bill.grandTotal.toStringAsFixed(0),
-                            style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF212121)),
-                          ),
-                          Text(
-                            _amountInWords(widget.bill.grandTotal),
-                            style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF757575)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
                 const SizedBox(height: 14),
+                // Table header
                 Container(
-                  color: const Color(0xFFF5F5F5),
+                  color: Colors.grey.shade100,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 6),
-                  child: Row(
-                    children: const [
-                      SizedBox(
-                          width: 24,
-                          child: Text('#',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700))),
-                      Expanded(
-                          flex: 3,
-                          child: Text('Item Details',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700))),
-                      Expanded(
-                          child: Text('Price/Unit',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700))),
-                      SizedBox(
-                          width: 40,
-                          child: Text('Qty',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700))),
-                      SizedBox(
-                          width: 40,
-                          child: Text('Rate',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700))),
-                      SizedBox(
-                          width: 48,
-                          child: Text('Total',
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700))),
+                      horizontal: 8, vertical: 5),
+                  child: const Row(
+                    children: [
+                      SizedBox(width: 20, child: Text('#', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700))),
+                      Expanded(flex: 3, child: Text('Item Details', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700))),
+                      SizedBox(width: 60, child: Text('Price/Unit', textAlign: TextAlign.center, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700))),
+                      SizedBox(width: 30, child: Text('Qty', textAlign: TextAlign.center, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700))),
+                      SizedBox(width: 60, child: Text('Total', textAlign: TextAlign.right, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700))),
                     ],
                   ),
                 ),
                 ...widget.bill.items.asMap().entries.map((e) {
-                  final idx = e.key + 1;
                   final item = e.value;
-                  return Container(
-                    decoration: const BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(
-                              color: Color(0xFFEEEEEE))),
-                    ),
+                  final idx = e.key + 1;
+                  return Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 8),
+                        horizontal: 8, vertical: 6),
                     child: Row(
                       children: [
                         SizedBox(
-                          width: 24,
-                          child: Text(
-                            idx.toString().padLeft(2, '0'),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
+                            width: 20,
+                            child: Text('${idx.toString().padLeft(2, '0')}',
+                                style: const TextStyle(fontSize: 11))),
                         Expanded(
-                          flex: 3,
-                          child: Text(item.itemName,
-                              style:
-                                  const TextStyle(fontSize: 12)),
-                        ),
-                        Expanded(
+                            flex: 3,
+                            child: Text(item.itemName,
+                                style: const TextStyle(fontSize: 11))),
+                        SizedBox(
+                          width: 60,
                           child: Text(
-                            '${item.rate.toStringAsFixed(0)}/PCS',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11),
-                          ),
+                              '${item.rate.toStringAsFixed(0)}/PCS',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 10)),
                         ),
                         SizedBox(
-                          width: 40,
+                          width: 30,
                           child: Text(
-                            item.quantity.toStringAsFixed(0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12),
-                          ),
+                              item.quantity.toStringAsFixed(0),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 11)),
                         ),
                         SizedBox(
-                          width: 40,
+                          width: 60,
                           child: Text(
-                            item.rate.toStringAsFixed(0),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 48,
-                          child: Text(
-                            item.total.toStringAsFixed(0),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          ),
+                              item.total.toStringAsFixed(0),
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
                   );
                 }),
-                Container(
-                  color: const Color(0xFFF5F5F5),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 6),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 24),
-                      const Expanded(
-                          flex: 3,
-                          child: Text('Sub-total Amount',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600))),
-                      const Expanded(child: SizedBox()),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          widget.bill.items
-                              .fold(0.0,
-                                  (s, i) => s + i.quantity)
-                              .toStringAsFixed(0),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 40,
-                        child: Text(
-                          widget.bill.subtotal.toStringAsFixed(0),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 48,
-                        child: Text(
-                          widget.bill.subtotal.toStringAsFixed(0),
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
+                const Divider(),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text('Total amount',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF757575))),
-                        Text(
-                          widget.bill.grandTotal.toStringAsFixed(0),
-                          style: const TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF212121)),
-                        ),
-                        Text(
-                          _amountInWords(widget.bill.grandTotal),
-                          style: const TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF757575)),
-                        ),
-                      ],
+                    const Text('Total',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 15)),
+                    Text(
+                      '₹ ${widget.bill.grandTotal.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 18),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 6),
-                const Center(
-                  child: Text(
-                    '~ THIS IS A DIGITALLY CREATED INVOICE ~',
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF9E9E9E),
-                        letterSpacing: 0.5),
-                  ),
-                ),
                 const SizedBox(height: 8),
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text('AUTHORISED SIGNATURE',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF757575))),
-                  ],
+                const Center(
+                  child: Text('~ DIGITALLY CREATED INVOICE ~',
+                      style:
+                          TextStyle(fontSize: 10, color: Color(0xFF9E9E9E))),
                 ),
-                const SizedBox(height: 12),
-                const Text('Thank you for the business.',
-                    style: TextStyle(
-                        fontSize: 11, color: Color(0xFF424242))),
               ],
             ),
           ),
-          Container(
-              width: double.infinity, height: 6, color: _themeColor),
+          Container(width: double.infinity, height: 6, color: _themeColor),
         ],
       ),
     );
   }
 
-  Widget _buildThermalInvoice(dynamic profile) {
+  // THERMAL on-screen preview (narrow receipt style)
+  Widget _buildThermalPreview(dynamic profile) {
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
     final phone = profile?.phone ?? '';
-    final invoiceNo = widget.bill.billNumber
-        .replaceAll(RegExp(r'[^0-9]'), '')
-        .trim();
+    final bill = widget.bill;
 
     return Center(
       child: Container(
-        width: 280,
+        width: 260,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: _themeColor, width: 2),
+          borderRadius: BorderRadius.circular(2),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withValues(alpha: 0.15),
@@ -4145,168 +4092,146 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                 offset: const Offset(0, 2))
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(businessName.toUpperCase(),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 14)),
-              if (address.isNotEmpty)
-                Text(address.toUpperCase(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 10)),
-              if (phone.isNotEmpty)
-                Text('PHONE: $phone',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 10)),
-              const Divider(thickness: 1),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('BILL TO',
-                    style: TextStyle(
-                        fontSize: 10, color: Color(0xFF757575))),
-              ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(businessName.toUpperCase(),
+                style: const TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 13),
+                textAlign: TextAlign.center),
+            if (address.isNotEmpty)
+              Text(address,
+                  style: const TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center),
+            if (phone.isNotEmpty)
+              Text('PHONE: $phone',
+                  style: const TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center),
+            const SizedBox(height: 6),
+            const Divider(height: 1),
+            const SizedBox(height: 6),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('BILL TO',
+                  style: TextStyle(
+                      fontSize: 9, fontWeight: FontWeight.w700)),
+            ),
+            if (bill.partyName != null && bill.partyName!.isNotEmpty)
               Align(
-                alignment: Alignment.center,
-                child: Column(
-                  children: [
-                    Text(
-                      '${_billTypeName(widget.bill.billType)}\nInvoice No.$invoiceNo',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    Text(
-                      'Invoice Date: ${AppHelpers.formatDate(widget.bill.date)}',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ],
-                ),
+                alignment: Alignment.centerLeft,
+                child: Text(bill.partyName!,
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w700)),
               ),
-              const Divider(thickness: 1),
-              Row(
-                children: const [
-                  Expanded(
-                      flex: 3,
-                      child: Text('Item',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  Expanded(
-                      child: Text('Qty',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  Expanded(
-                      child: Text('Amount',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                ],
-              ),
-              const Divider(thickness: 0.5),
-              ...widget.bill.items.map((item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        Expanded(
-                            flex: 3,
-                            child: Text(item.itemName,
-                                style:
-                                    const TextStyle(fontSize: 11))),
-                        Expanded(
-                            child: Text(
-                                '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)}',
-                                textAlign: TextAlign.center,
-                                style:
-                                    const TextStyle(fontSize: 11))),
-                        Expanded(
-                            child: Text(
-                                '₹${item.total.toStringAsFixed(0)}',
-                                textAlign: TextAlign.right,
-                                style:
-                                    const TextStyle(fontSize: 11))),
-                      ],
-                    ),
-                  )),
-              const Divider(thickness: 0.5),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Item Total',
-                      style: TextStyle(fontSize: 11)),
-                  Text(
-                      '₹${widget.bill.subtotal.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 11)),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Net Amount',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                  Text(
-                      '${widget.bill.grandTotal.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-              const Divider(thickness: 1),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('RECEIVED',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                  Text(
-                      '₹${widget.bill.paidAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Balance',
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                  Text(widget.bill.balanceDue.toStringAsFixed(2),
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ],
-          ),
+            const SizedBox(height: 4),
+            Text(
+              '${bill.billNumber}  Invoice No.${bill.billNumber.replaceAll(RegExp(r'[^0-9]'), '').trim()}',
+              style: const TextStyle(fontSize: 8),
+              textAlign: TextAlign.center,
+            ),
+            Text('Invoice Date: ${AppHelpers.formatDate(bill.date)}',
+                style: const TextStyle(fontSize: 8),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            const Divider(height: 1),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Item',
+                    style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w700)),
+                Text('Qty',
+                    style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w700)),
+                Text('Amount',
+                    style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const Divider(height: 1),
+            ...bill.items.map((item) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                          child: Text(item.itemName,
+                              style: const TextStyle(fontSize: 10))),
+                      Text(
+                          '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1).padLeft(4)} PCS',
+                          style: const TextStyle(fontSize: 9)),
+                      const SizedBox(width: 4),
+                      Text('₹${item.total.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 10)),
+                    ],
+                  ),
+                )),
+            const Divider(height: 1),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Item Total',
+                    style: TextStyle(fontSize: 9)),
+                Text('₹${bill.subtotal.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Net Amount',
+                    style: TextStyle(fontSize: 9)),
+                Text(bill.grandTotal.toStringAsFixed(0),
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const Divider(height: 1),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('RECEIVED',
+                    style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w700)),
+                Text('₹${bill.paidAmount.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Balance',
+                    style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w700)),
+                Text(bill.balanceDue.toStringAsFixed(2),
+                    style: const TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text('Thank you for your business!',
+                style: TextStyle(fontSize: 8),
+                textAlign: TextAlign.center),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildBasicInvoice(dynamic profile) {
+  // BASIC on-screen preview
+  Widget _buildBasicPreview(dynamic profile) {
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
     final phone = profile?.phone ?? '';
-    final billTypeName = _billTypeName(widget.bill.billType);
-    final invoiceNo = widget.bill.billNumber
-        .replaceAll(RegExp(r'[^0-9]'), '')
-        .trim();
+    final bill = widget.bill;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: _themeColor, width: 1.5),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha: 0.15),
@@ -4314,336 +4239,163 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
               offset: const Offset(0, 2))
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Solid colour header bar
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            color: _themeColor,
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(businessName,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14)),
-                      if (address.isNotEmpty)
-                        Text(address,
-                            style: const TextStyle(fontSize: 11)),
-                      if (phone.isNotEmpty)
-                        Text('Phone: $phone',
-                            style: const TextStyle(fontSize: 11)),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('Invoice No. $invoiceNo',
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                    Text(
-                        'Invoice Date: ${AppHelpers.formatDate(widget.bill.date)}',
-                        style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF757575))),
-                    Text(
-                      'Original • #$billTypeName no. $invoiceNo',
+                Text(businessName.toUpperCase(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13)),
+                if (address.isNotEmpty)
+                  Text(address,
                       style: const TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF9E9E9E)),
-                    ),
-                  ],
-                ),
+                          color: Colors.white70, fontSize: 9)),
+                if (phone.isNotEmpty)
+                  Text('PHONE: $phone',
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 9)),
               ],
             ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              decoration: BoxDecoration(
-                border: Border.all(color: _themeColor.withValues(alpha: 0.3)),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('BILL TO',
-                    style: TextStyle(
-                        fontSize: 11, color: Color(0xFF9E9E9E))),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              color: const Color(0xFFF5F5F5),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 6),
-              child: Row(
-                children: const [
-                  SizedBox(
-                      width: 30,
-                      child: Text('S.No',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  Expanded(
-                      flex: 3,
-                      child: Text('ITEMS',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  SizedBox(
-                      width: 50,
-                      child: Text('QTY',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  SizedBox(
-                      width: 50,
-                      child: Text('RATE',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  SizedBox(
-                      width: 36,
-                      child: Text('DISC.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
-                  SizedBox(
-                      width: 56,
-                      child: Text('AMOUNT',
-                          textAlign: TextAlign.right,
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700))),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('BILL TO',
+                      style: TextStyle(
+                          fontSize: 9, fontWeight: FontWeight.w700)),
+                  if (bill.partyName != null &&
+                      bill.partyName!.isNotEmpty)
+                    Text(bill.partyName!,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 11)),
                 ],
               ),
-            ),
-            ...widget.bill.items.asMap().entries.map((e) {
-              final item = e.value;
-              final idx = e.key + 1;
-              return Container(
-                decoration: const BoxDecoration(
-                    border: Border(
-                        bottom: BorderSide(
-                            color: Color(0xFFEEEEEE)))),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 7),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(bill.billNumber
+                      .replaceAll(RegExp(r'[^a-zA-Z0-9 ]'), ' ')
+                      .trim(),
+                      style: const TextStyle(fontSize: 9)),
+                  Text(
+                      'Invoice No.${bill.billNumber.replaceAll(RegExp(r'[^0-9]'), '').trim()}',
+                      style: const TextStyle(fontSize: 10)),
+                  Text('Invoice Date: ${AppHelpers.formatDate(bill.date)}',
+                      style: const TextStyle(fontSize: 9)),
+                ],
+              ),
+            ],
+          ),
+          const Divider(height: 12),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                  flex: 3,
+                  child: Text('Item',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 10))),
+              Text('Qty',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 10)),
+              SizedBox(width: 8),
+              Text('Amount',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 10)),
+            ],
+          ),
+          const Divider(height: 8),
+          ...bill.items.map((item) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    SizedBox(
-                        width: 30,
-                        child: Text('$idx',
-                            style: const TextStyle(fontSize: 11))),
                     Expanded(
                         flex: 3,
                         child: Text(item.itemName,
                             style: const TextStyle(fontSize: 11))),
-                    SizedBox(
-                        width: 50,
-                        child: Text(
-                            '${item.quantity.toStringAsFixed(1)} PCS',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11))),
-                    SizedBox(
-                        width: 50,
-                        child: Text(
-                            item.rate.toStringAsFixed(2),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11))),
-                    SizedBox(
-                        width: 36,
-                        child: Text(
-                            item.discount.toStringAsFixed(2),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11))),
-                    SizedBox(
-                        width: 56,
-                        child: Text(
-                            item.total.toStringAsFixed(2),
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600))),
+                    Text(
+                        '${item.quantity.toStringAsFixed(item.quantity % 1 == 0 ? 0 : 1)} PCS',
+                        style: const TextStyle(fontSize: 10)),
+                    const SizedBox(width: 8),
+                    Text('₹${item.total.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 11)),
                   ],
                 ),
-              );
-            }),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 6),
-              decoration: const BoxDecoration(
-                  border: Border(
-                      bottom: BorderSide(
-                          color: Color(0xFFE0E0E0)))),
-              child: Row(
-                children: [
-                  const SizedBox(width: 30),
-                  const Expanded(
-                      flex: 3,
-                      child: Text('Subtotal',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontStyle: FontStyle.italic))),
-                  SizedBox(
-                      width: 50,
-                      child: Text('-',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 11))),
-                  const SizedBox(width: 50),
-                  const SizedBox(width: 36),
-                  SizedBox(
-                      width: 56,
-                      child: Text(
-                          widget.bill.subtotal.toStringAsFixed(2),
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontStyle: FontStyle.italic))),
-                ],
-              ),
+              )),
+          const Divider(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('Item Total  ₹${bill.subtotal.toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 10)),
+                Text('Net Amount  ${bill.grandTotal.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 10)),
+              ],
             ),
-            _buildBasicTotalRow('Round Off', '-'),
-            _buildBasicTotalRow(
-                'TOTAL',
-                widget.bill.grandTotal.toStringAsFixed(2),
-                bold: true),
-            _buildBasicTotalRow('RECEIVED AMOUNT',
-                widget.bill.paidAmount.toStringAsFixed(2)),
-            _buildBasicTotalRow('INVOICE BALANCE',
-                widget.bill.balanceDue.toStringAsFixed(2)),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                  border: Border.all(
-                      color:
-                          _themeColor.withValues(alpha: 0.3))),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('TOTAL AMOUNT IN WORDS',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5)),
-                  const SizedBox(height: 3),
-                  Text(_amountInWords(widget.bill.grandTotal),
-                      style: const TextStyle(fontSize: 11)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBasicTotalRow(String label, String value,
-      {bool bold = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: const BoxDecoration(
-          border: Border(
-              bottom: BorderSide(color: Color(0xFFEEEEEE)))),
-      child: Row(
-        children: [
-          const SizedBox(width: 30),
-          Expanded(
-            flex: 3,
-            child: Text(label,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight:
-                        bold ? FontWeight.w700 : FontWeight.normal)),
           ),
-          const SizedBox(width: 50),
-          const SizedBox(width: 50),
-          const SizedBox(width: 36),
-          SizedBox(
-            width: 56,
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight:
-                        bold ? FontWeight.w700 : FontWeight.normal)),
+          const Divider(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('RECEIVED  ₹${bill.paidAmount.toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 10)),
+                Text('Balance  ${bill.balanceDue.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 10)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Center(
+            child: Text('~ THIS IS A DIGITALLY CREATED INVOICE ~',
+                style: TextStyle(fontSize: 9, color: Color(0xFF9E9E9E)),
+                textAlign: TextAlign.center),
           ),
         ],
       ),
     );
   }
-
-  String _billTypeName(BillType type) {
-    switch (type) {
-      case BillType.sale:
-        return 'Sale Bill';
-      case BillType.purchase:
-        return 'Purchase Bill';
-      case BillType.expense:
-        return 'Expense';
-      default:
-        return 'Bill';
-    }
-  }
-
-  String _amountInWords(double amount) {
-    final int rupees = amount.toInt();
-    final ones = [
-      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight',
-      'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen',
-      'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'
-    ];
-    final tens = [
-      '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy',
-      'Eighty', 'Ninety'
-    ];
-
-    if (rupees == 0) return 'Zero rupees only';
-
-    String words = '';
-    if (rupees >= 10000000) {
-      words += '${_convertHundreds((rupees ~/ 10000000) % 100, ones, tens)} Crore ';
-    }
-    if (rupees >= 100000) {
-      words += '${_convertHundreds((rupees ~/ 100000) % 100, ones, tens)} Lakh ';
-    }
-    if (rupees >= 1000) {
-      words += '${_convertHundreds((rupees ~/ 1000) % 100, ones, tens)} Thousand ';
-    }
-    if (rupees >= 100) {
-      words += '${ones[(rupees ~/ 100) % 10]} Hundred ';
-    }
-    words += _convertHundreds(rupees % 100, ones, tens);
-
-    return '${words.trim()} rupees only';
-  }
-
-  String _convertHundreds(int n, List<String> ones, List<String> tens) {
-    if (n == 0) return '';
-    if (n < 20) return ones[n];
-    return '${tens[n ~/ 10]}${n % 10 != 0 ? ' ${ones[n % 10]}' : ''}';
-  }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// THEME PICKER SHEET
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Theme picker ──────────────────────────────────────────────────────────────
+const List<Map<String, dynamic>> _kThemeColors = [
+  {'name': 'Blue', 'color': Color(0xFF1565C0)},
+  {'name': 'Red', 'color': Color(0xFFB71C1C)},
+  {'name': 'Green', 'color': Color(0xFF2E7D32)},
+  {'name': 'Purple', 'color': Color(0xFF6A1B9A)},
+  {'name': 'Orange', 'color': Color(0xFFE65100)},
+  {'name': 'Teal', 'color': Color(0xFF00695C)},
+  {'name': 'Pink', 'color': Color(0xFFAD1457)},
+  {'name': 'Dark', 'color': Color(0xFF212121)},
+];
+
 class _ThemePickerSheet extends StatelessWidget {
   final Color currentColor;
   final void Function(Color) onColorSelected;
 
-  const _ThemePickerSheet({
-    required this.currentColor,
-    required this.onColorSelected,
-  });
+  const _ThemePickerSheet(
+      {required this.currentColor, required this.onColorSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -4658,18 +4410,8 @@ class _ThemePickerSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Choose Theme Color',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF212121)),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'The selected color will appear as the border and header color of the bill.',
-            style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E)),
-          ),
+          const Text('Choose Theme Color',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
           Wrap(
             spacing: 16,
@@ -4689,33 +4431,18 @@ class _ThemePickerSheet extends StatelessWidget {
                         color: color,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isSelected
-                              ? Colors.black
-                              : Colors.transparent,
+                          color: isSelected ? Colors.black : Colors.transparent,
                           width: 3,
                         ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: color.withValues(alpha: 0.5),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                )
-                              ]
-                            : [],
                       ),
                       child: isSelected
-                          ? const Icon(Icons.check,
-                              color: Colors.white, size: 26)
+                          ? const Icon(Icons.check, color: Colors.white, size: 26)
                           : null,
                     ),
                     const SizedBox(height: 4),
                     Text(name,
                         style: TextStyle(
                             fontSize: 11,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.normal,
                             color: isSelected
                                 ? color
                                 : const Color(0xFF424242))),
@@ -4730,7 +4457,7 @@ class _ThemePickerSheet extends StatelessWidget {
   }
 }
 
-// ── PDF format tab ────────────────────────────────────────────────────────────
+// ── Format tab widget ─────────────────────────────────────────────────────────
 class _FormatTab extends StatelessWidget {
   final String label;
   final bool isNew;
@@ -4771,9 +4498,7 @@ class _FormatTab extends StatelessWidget {
                     fontSize: 13,
                     fontWeight:
                         selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
-                        ? activeColor
-                        : const Color(0xFF424242),
+                    color: selected ? activeColor : const Color(0xFF424242),
                   ),
                 ),
               ),

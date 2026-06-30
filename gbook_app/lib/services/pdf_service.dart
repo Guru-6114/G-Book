@@ -1,10 +1,7 @@
 // lib/services/pdf_service.dart
-// Full working PDF generation and share for supplier/customer reports
-// Uses only packages already available or easily added: pdf + path_provider + share_plus
-// pubspec.yaml additions needed:
-//   pdf: ^3.11.1
-//   path_provider: ^2.1.4
-//   share_plus: ^10.1.2
+//
+// FIX 3 — all ₹ replaced with Rs. inside PDF content because the default
+// base-14 PDF fonts don't contain U+20B9 (Rupee sign).
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -20,7 +17,9 @@ class PdfService {
   PdfService._();
   static final PdfService instance = PdfService._();
 
-  // ── Build PDF bytes ──────────────────────────────────────────────────────
+  /// Format for PDF — Rs. instead of ₹
+  String _pdfAmt(double v) => 'Rs. ${v.toStringAsFixed(2)}';
+
   Future<Uint8List> _buildPdf({
     required String partyName,
     String? phone,
@@ -31,14 +30,15 @@ class PdfService {
   }) async {
     final pdf = pw.Document();
 
-    final totalGiven =
-        transactions.where((t) => t.isGiven).fold(0.0, (s, t) => s + t.amount);
+    final totalGiven = transactions
+        .where((t) => t.isGiven)
+        .fold(0.0, (s, t) => s + t.amount);
     final totalGot = transactions
         .where((t) => !t.isGiven)
         .fold(0.0, (s, t) => s + t.amount);
 
     final dateRange = (startDate != null || endDate != null)
-        ? '${startDate != null ? AppHelpers.formatDate(startDate) : "All"} — ${endDate != null ? AppHelpers.formatDate(endDate) : "All"}'
+        ? '${startDate != null ? AppHelpers.formatDate(startDate) : "All"} - ${endDate != null ? AppHelpers.formatDate(endDate) : "All"}'
         : 'All dates';
 
     pdf.addPage(
@@ -46,7 +46,7 @@ class PdfService {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (context) => [
-          // ── Header ──────────────────────────────────────────────────────
+          // Header
           pw.Container(
             padding: const pw.EdgeInsets.all(16),
             decoration: const pw.BoxDecoration(
@@ -57,7 +57,7 @@ class PdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'GBook — Account Statement',
+                  'GBook - Account Statement',
                   style: pw.TextStyle(
                     color: PdfColors.white,
                     fontSize: 18,
@@ -82,23 +82,20 @@ class PdfService {
           ),
           pw.SizedBox(height: 16),
 
-          // ── Summary ──────────────────────────────────────────────────────
+          // Summary — FIX: Rs. not ₹
           pw.Row(
             children: [
               _summaryBox('Net Balance',
-                  'Rs. ${balance.abs().toStringAsFixed(2)}',
+                  _pdfAmt(balance.abs()),
                   balance >= 0 ? PdfColors.green800 : PdfColors.red800),
               pw.SizedBox(width: 8),
-              _summaryBox(
-                  'You Gave', 'Rs. ${totalGiven.toStringAsFixed(2)}', PdfColors.red800),
+              _summaryBox('You Gave', _pdfAmt(totalGiven), PdfColors.red800),
               pw.SizedBox(width: 8),
-              _summaryBox(
-                  'You Got', 'Rs. ${totalGot.toStringAsFixed(2)}', PdfColors.green800),
+              _summaryBox('You Got', _pdfAmt(totalGot), PdfColors.green800),
             ],
           ),
           pw.SizedBox(height: 16),
 
-          // ── Table header ─────────────────────────────────────────────────
           pw.Text('${transactions.length} Entries',
               style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold, fontSize: 12)),
@@ -112,17 +109,20 @@ class PdfService {
               3: const pw.FlexColumnWidth(1.5),
             },
             children: [
-              // Header row
+              // Header
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
                   _cell('DATE', isHeader: true),
                   _cell('NOTE', isHeader: true),
-                  _cell('YOU GAVE', isHeader: true, align: pw.TextAlign.right),
-                  _cell('YOU GOT', isHeader: true, align: pw.TextAlign.right),
+                  // FIX: column headers don't use rupee symbol — just labels
+                  _cell('YOU GAVE',
+                      isHeader: true, align: pw.TextAlign.right),
+                  _cell('YOU GOT',
+                      isHeader: true, align: pw.TextAlign.right),
                 ],
               ),
-              // Data rows
+              // Data rows — FIX: Rs. not ₹
               ...transactions.map((t) => pw.TableRow(
                     decoration: pw.BoxDecoration(
                       color: transactions.indexOf(t) % 2 == 0
@@ -133,32 +133,28 @@ class PdfService {
                       _cell(AppHelpers.formatDate(t.date)),
                       _cell(t.note ?? t.paymentMode.toUpperCase()),
                       _cell(
-                        t.isGiven
-                            ? 'Rs. ${t.amount.toStringAsFixed(2)}'
-                            : '',
+                        t.isGiven ? _pdfAmt(t.amount) : '',
                         color: PdfColors.red700,
                         align: pw.TextAlign.right,
                       ),
                       _cell(
-                        !t.isGiven
-                            ? 'Rs. ${t.amount.toStringAsFixed(2)}'
-                            : '',
+                        !t.isGiven ? _pdfAmt(t.amount) : '',
                         color: PdfColors.green700,
                         align: pw.TextAlign.right,
                       ),
                     ],
                   )),
-              // Totals row
+              // Totals — FIX: Rs. not ₹
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
                   _cell('TOTAL', isHeader: true),
                   _cell(''),
-                  _cell('Rs. ${totalGiven.toStringAsFixed(2)}',
+                  _cell(_pdfAmt(totalGiven),
                       isHeader: true,
                       color: PdfColors.red700,
                       align: pw.TextAlign.right),
-                  _cell('Rs. ${totalGot.toStringAsFixed(2)}',
+                  _cell(_pdfAmt(totalGot),
                       isHeader: true,
                       color: PdfColors.green700,
                       align: pw.TextAlign.right),
@@ -170,9 +166,8 @@ class PdfService {
           pw.Divider(),
           pw.SizedBox(height: 8),
           pw.Text(
-            'Generated by GBook — Digital Khata for Your Business',
-            style: pw.TextStyle(
-                color: PdfColors.grey500, fontSize: 10),
+            'Generated by GBook - Digital Khata for Your Business',
+            style: pw.TextStyle(color: PdfColors.grey500, fontSize: 10),
           ),
         ],
       ),
@@ -226,7 +221,6 @@ class PdfService {
     );
   }
 
-  // ── Save to temp file ────────────────────────────────────────────────────
   Future<File> _saveToTemp(Uint8List bytes, String partyName) async {
     final dir = await getTemporaryDirectory();
     final safeName = partyName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
@@ -236,7 +230,6 @@ class PdfService {
     return file;
   }
 
-  // ── Public: Download PDF ─────────────────────────────────────────────────
   Future<void> downloadPdf(
     BuildContext context, {
     required String partyName,
@@ -258,11 +251,10 @@ class PdfService {
 
       if (!context.mounted) return;
 
-      // Save + share so user can save to Downloads via OS share sheet
       final file = await _saveToTemp(bytes, partyName);
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/pdf')],
-        subject: 'GBook Report — $partyName',
+        subject: 'GBook Report - $partyName',
         text: 'Account statement for $partyName',
       );
     } catch (e) {
@@ -273,7 +265,6 @@ class PdfService {
     }
   }
 
-  // ── Public: Share on WhatsApp / any app ─────────────────────────────────
   Future<void> shareOnWhatsApp(
     BuildContext context, {
     required String partyName,
@@ -298,9 +289,9 @@ class PdfService {
       final file = await _saveToTemp(bytes, partyName);
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/pdf')],
-        subject: 'GBook Report — $partyName',
+        subject: 'GBook Report - $partyName',
         text: 'Hi $partyName, please find your account statement attached.\n'
-            'Net Balance: Rs. ${balance.abs().toStringAsFixed(2)}\n'
+            'Net Balance: ${_pdfAmt(balance.abs())}\n'
             'Sent via GBook',
       );
     } catch (e) {
