@@ -7,6 +7,8 @@ import 'screens/auth_screens.dart';
 import 'screens/home_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/customer_screen.dart';
+import 'screens/app_lock_screen.dart';
+import 'services/app_lock_service.dart';
 import 'models/models.dart';
 import 'theme/app_theme.dart';
 
@@ -95,13 +97,27 @@ class _RootRedirect extends StatefulWidget {
 class _RootRedirectState extends State<_RootRedirect> {
   bool _splashDone = false;
   bool _isLoggedIn = false;
+  // FIX: When the user is logged in and App Lock is enabled, we hold the
+  // app on the PIN unlock screen right after splash, before showing
+  // HomeScreen — matching the Khatabook-style "Unlock" flow.
+  bool _needsUnlock = false;
 
-  void onSplashComplete(bool isLoggedIn) {
+  Future<void> onSplashComplete(bool isLoggedIn) async {
+    bool needsUnlock = false;
+    if (isLoggedIn) {
+      needsUnlock = await AppLockService.instance.isEnabled();
+    }
     if (!mounted) return;
     setState(() {
       _splashDone = true;
       _isLoggedIn = isLoggedIn;
+      _needsUnlock = needsUnlock;
     });
+  }
+
+  void _onUnlocked() {
+    if (!mounted) return;
+    setState(() => _needsUnlock = false);
   }
 
   @override
@@ -109,6 +125,9 @@ class _RootRedirectState extends State<_RootRedirect> {
     final auth = context.watch<AuthProvider>();
 
     if (_splashDone && (auth.isAuthenticated || _isLoggedIn)) {
+      if (_needsUnlock) {
+        return UnlockScreen(onUnlocked: _onUnlocked);
+      }
       return const HomeScreen();
     }
     if (_splashDone) {

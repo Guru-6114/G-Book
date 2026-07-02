@@ -5,6 +5,8 @@ import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import 'profile_screen.dart';
+import 'app_lock_screen.dart';
+import '../services/app_lock_service.dart';
 
 /// Settings hub — covers test-report item 17:
 /// "Settings - Have more options as SMS, Payment, Language Backup etc"
@@ -23,7 +25,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _smsAlertsEnabled = true;
   bool _autoBackupEnabled = true;
-  bool _biometricLockEnabled = false;
+  bool _appLockEnabled = false;
+  bool _appLockLoading = true;
   String _language = 'English';
   String _currency = 'INR (₹)';
 
@@ -34,6 +37,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ];
 
   static const List<String> _currencies = ['INR (₹)', 'USD (\$)', 'EUR (€)'];
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshAppLockStatus();
+  }
+
+  Future<void> _refreshAppLockStatus() async {
+    final enabled = await AppLockService.instance.isEnabled();
+    if (!mounted) return;
+    setState(() {
+      _appLockEnabled = enabled;
+      _appLockLoading = false;
+    });
+  }
+
+  Future<void> _openAppLock() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AppLockScreen()),
+    );
+    _refreshAppLockStatus();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,13 +128,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _showCurrencyPicker(context),
             ),
             const Divider(height: 1, indent: 56),
-            _SettingsSwitchTile(
+            // App Lock now opens the dedicated PIN-based AppLockScreen
+            // (create/confirm PIN + change PIN), instead of a plain switch.
+            _SettingsTile(
               icon: Icons.fingerprint_outlined,
               iconColor: const Color(0xFFB71C1C),
               title: 'App Lock',
-              subtitle: 'Require biometric / PIN to open GBook',
-              value: _biometricLockEnabled,
-              onChanged: (v) => setState(() => _biometricLockEnabled = v),
+              subtitle: _appLockLoading
+                  ? 'Loading...'
+                  : (_appLockEnabled
+                      ? 'Enabled — 4-digit PIN required to open GBook'
+                      : 'Require a 4-digit PIN to open GBook'),
+              onTap: _openAppLock,
             ),
           ]),
 

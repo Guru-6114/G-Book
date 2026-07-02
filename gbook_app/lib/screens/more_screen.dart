@@ -12,6 +12,8 @@ import 'settings_screen.dart';
 import 'sms_settings_screen.dart';
 import 'payment_settings_screen.dart';
 import 'language_screen.dart';
+import 'app_lock_screen.dart';
+import '../services/app_lock_service.dart';
 
 class MoreScreen extends StatelessWidget {
   final void Function(int tabIndex)? onNavigateToTab;
@@ -306,14 +308,9 @@ class MoreScreen extends StatelessWidget {
                         label: 'Recycle Bin',
                         onTap: () => _showRecycleBin(context),
                       ),
-                      _AccordionToggleRow(
-                        label: 'App Lock',
-                        onChanged: (_) => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SettingsScreen()),
-                        ),
-                      ),
+                      // App Lock → dedicated AppLockScreen (PIN create/change),
+                      // never the full SettingsScreen.
+                      const _AppLockToggleRow(),
                       // Language → dedicated LanguageScreen (non-onboarding)
                       _AccordionRow(
                         label: 'Language',
@@ -1109,45 +1106,76 @@ class _AccordionRow extends StatelessWidget {
   }
 }
 
-class _AccordionToggleRow extends StatefulWidget {
-  final String label;
-  final ValueChanged<bool> onChanged;
-
-  const _AccordionToggleRow({
-    required this.label,
-    required this.onChanged,
-  });
+// ── App Lock row (Khatabook-style) ─────────────────────────────────────────
+// Replaces the old generic _AccordionToggleRow for App Lock specifically.
+// Tapping the row OR the switch opens the dedicated AppLockScreen, which
+// handles PIN creation / confirmation / change and turning the lock on/off.
+// The switch here only ever *reflects* the persisted state (from
+// AppLockService); it never toggles state directly.
+class _AppLockToggleRow extends StatefulWidget {
+  const _AppLockToggleRow();
 
   @override
-  State<_AccordionToggleRow> createState() => _AccordionToggleRowState();
+  State<_AppLockToggleRow> createState() => _AppLockToggleRowState();
 }
 
-class _AccordionToggleRowState extends State<_AccordionToggleRow> {
-  bool _value = false;
+class _AppLockToggleRowState extends State<_AppLockToggleRow> {
+  bool _enabled = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final enabled = await AppLockService.instance.isEnabled();
+    if (!mounted) return;
+    setState(() {
+      _enabled = enabled;
+      _loading = false;
+    });
+  }
+
+  Future<void> _openAppLockScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AppLockScreen()),
+    );
+    _refresh();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.label,
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF212121)),
+        InkWell(
+          onTap: _openAppLockScreen,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'App Lock',
+                    style: TextStyle(fontSize: 14, color: Color(0xFF212121)),
+                  ),
                 ),
-              ),
-              Switch(
-                value: _value,
-                activeThumbColor: AppTheme.primaryColor,
-                onChanged: (v) {
-                  setState(() => _value = v);
-                  widget.onChanged(v);
-                },
-              ),
-            ],
+                if (_loading)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Switch(
+                    value: _enabled,
+                    activeThumbColor: AppTheme.primaryColor,
+                    onChanged: (_) => _openAppLockScreen(),
+                  ),
+              ],
+            ),
           ),
         ),
         const Divider(height: 1, indent: 14, endIndent: 14),
