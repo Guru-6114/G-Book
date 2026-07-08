@@ -1,6 +1,7 @@
 // lib/screens/more_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
@@ -580,10 +581,45 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
-  void _openWhatsAppHelp(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Opening WhatsApp support chat...')),
-    );
+  // ── FIX: real WhatsApp launch instead of a no-op SnackBar ────────────────
+  // Tries the native WhatsApp app first (whatsapp://), then falls back to
+  // the wa.me web link if WhatsApp isn't installed / can't be resolved.
+  Future<void> _openWhatsAppHelp(BuildContext context) async {
+    const supportPhone = '911800000000'; // country code + number, digits only
+    const message = 'Hi, I need help with GBook.';
+    final encodedMsg = Uri.encodeComponent(message);
+
+    final waAppUri =
+        Uri.parse('whatsapp://send?phone=$supportPhone&text=$encodedMsg');
+    final waWebUri =
+        Uri.parse('https://wa.me/$supportPhone?text=$encodedMsg');
+
+    try {
+      final canOpenApp = await canLaunchUrl(waAppUri);
+      if (canOpenApp) {
+        final launched =
+            await launchUrl(waAppUri, mode: LaunchMode.externalApplication);
+        if (launched) return;
+      }
+    } catch (_) {
+      // fall through to web link
+    }
+
+    try {
+      final launched =
+          await launchUrl(waWebUri, mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open WhatsApp')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('WhatsApp is not installed')),
+        );
+      }
+    }
   }
 
   void _callSupport(BuildContext context) {
@@ -825,51 +861,11 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
+  // ── FIX: full-page, categorized FAQ screen (matches Khatabook layout) ────
   void _showFAQs(BuildContext context) {
-    const faqs = [
-      ('How do I add a customer?',
-          'Go to Parties tab → tap the + button or ADD CUSTOMER at the bottom.'),
-      ('How do I generate a bill?',
-          'Go to Bills tab → tap ADD BILL → fill in items and party details.'),
-      ('How do I record a payment received?',
-          'Open the customer → tap RECEIVED → enter the amount.'),
-      ('Can I send SMS to customers?',
-          'Yes! After recording a transaction, tap SMS in the quick action bar on the customer page.'),
-      ('How to track expenses?',
-          'Go to Bills → Expense tab → ADD BILL. Or use Cashbook for quick cash entries.'),
-    ];
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('FAQs'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: faqs.length,
-            separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (_, i) => ExpansionTile(
-              title: Text(faqs[i].$1,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 14)),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Text(faqs[i].$2,
-                      style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF616161))),
-                )
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close')),
-        ],
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const _FaqCategoriesScreen()),
     );
   }
 
@@ -1107,11 +1103,6 @@ class _AccordionRow extends StatelessWidget {
 }
 
 // ── App Lock row (Khatabook-style) ─────────────────────────────────────────
-// Replaces the old generic _AccordionToggleRow for App Lock specifically.
-// Tapping the row OR the switch opens the dedicated AppLockScreen, which
-// handles PIN creation / confirmation / change and turning the lock on/off.
-// The switch here only ever *reflects* the persisted state (from
-// AppLockService); it never toggles state directly.
 class _AppLockToggleRow extends StatefulWidget {
   const _AppLockToggleRow();
 
@@ -1228,5 +1219,474 @@ class _StaffFeatureRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FAQ — categorized, fully working (Khatabook-style)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _FaqItem {
+  final String question;
+  final String answer;
+  const _FaqItem(this.question, this.answer);
+}
+
+class _FaqCategory {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<_FaqItem> items;
+
+  const _FaqCategory({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.items,
+  });
+}
+
+final List<_FaqCategory> _kFaqCategories = [
+  _FaqCategory(
+    icon: Icons.person_add_alt_outlined,
+    title: 'Managing Customers',
+    subtitle: 'Add customers, transactions, send reminders etc',
+    items: const [
+      _FaqItem(
+        'How do I add a new customer?',
+        'Go to the Parties tab → Customers → tap ADD CUSTOMER, fill in the name, phone number, email and address, then tap SAVE.',
+      ),
+      _FaqItem(
+        'How do I record a payment given or received?',
+        'Open the customer from the Parties list, then tap GIVEN or RECEIVED at the bottom of the screen, enter the amount, note and payment mode, and save.',
+      ),
+      _FaqItem(
+        'How do I edit or delete a customer?',
+        'Open the customer, tap the edit (pencil) icon in the top bar to update details, or the delete icon to remove the customer along with their transactions.',
+      ),
+      _FaqItem(
+        'How do I send a payment reminder?',
+        'Open the customer\'s ledger, tap the reminder/SMS icon in the quick action bar to send a WhatsApp or SMS reminder with their current balance.',
+      ),
+      _FaqItem(
+        'What do "You will give" and "You will get" mean?',
+        '"You will get" is the amount owed to you by customers. "You will give" is the amount you owe suppliers or customers. Both are shown as running totals on the Parties screen.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.local_shipping_outlined,
+    title: 'Managing Suppliers',
+    subtitle: 'Add suppliers and track what you owe',
+    items: const [
+      _FaqItem(
+        'How do I add a supplier?',
+        'Go to Parties → Suppliers tab → tap ADD SUPPLIER and fill in their details.',
+      ),
+      _FaqItem(
+        'How is supplier balance calculated?',
+        'Every purchase bill or payment you record against a supplier updates their running balance automatically — no manual calculation needed.',
+      ),
+      _FaqItem(
+        'Can I see total payable to all suppliers at once?',
+        'Yes — the Suppliers tab shows a "Total Payable" summary card at the top, combining balances across all suppliers.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.receipt_long_outlined,
+    title: 'Bills & Invoices',
+    subtitle: 'Create sale, purchase and return bills',
+    items: const [
+      _FaqItem(
+        'How do I create a sale or purchase bill?',
+        'Go to the Bills tab, choose Sale or Purchase, tap ADD BILL, add items, set payment status, and save.',
+      ),
+      _FaqItem(
+        'How do I create a sale or purchase return?',
+        'Open the original bill from Bill Detail, tap "+ SALE RETURN" or "+ PURCHASE RETURN", adjust the quantities being returned, choose a refund mode, and generate the return.',
+      ),
+      _FaqItem(
+        'How do I share or download an invoice PDF?',
+        'Open any bill → tap VIEW PDF. You can pick Premium, Thermal or Basic invoice formats, then use Download or Share on WhatsApp.',
+      ),
+      _FaqItem(
+        'What does "Fully Paid / Partial / Unpaid" mean on a bill?',
+        'It reflects how much of the bill amount has been paid — Fully Paid means the full amount is settled, Partial means some amount is still due, Unpaid means nothing has been paid yet.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.inventory_2_outlined,
+    title: 'Items & Inventory',
+    subtitle: 'Add items, prices, stock and low-stock alerts',
+    items: const [
+      _FaqItem(
+        'How do I add a new item?',
+        'Go to the Items tab → tap ADD ITEM, enter the name, sale price, purchase price, stock quantity and unit, then save.',
+      ),
+      _FaqItem(
+        'How does stock update automatically?',
+        'Stock reduces automatically when you create a sale bill and increases when you create a purchase bill, so you don\'t need to update it manually.',
+      ),
+      _FaqItem(
+        'What is the low-stock warning?',
+        'Each item has a low-stock threshold. When available stock falls at or below that number, the item is flagged so you know to reorder.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.account_balance_wallet_outlined,
+    title: 'Cashbook & Payments',
+    subtitle: 'Track daily cash in / cash out',
+    items: const [
+      _FaqItem(
+        'What is the Cashbook for?',
+        'Cashbook records all your cash-in and cash-out entries separately from customer/supplier ledgers — useful for tracking day-to-day business cash flow.',
+      ),
+      _FaqItem(
+        'How do I add a cashbook entry?',
+        'Open Cashbook from the More menu or the Bills header, tap the add button, choose Cash In or Cash Out, enter the amount and description, and save.',
+      ),
+      _FaqItem(
+        'Where can I set accepted payment modes?',
+        'Go to More → Payment Settings to configure which payment modes (Cash, UPI, Bank Transfer, Cheque) appear when recording transactions.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.person_outline,
+    title: 'My Profile & Business',
+    subtitle: 'Manage your profile and business details',
+    items: const [
+      _FaqItem(
+        'How do I update my business name or address?',
+        'Go to More → Profile (or the edit icon next to your business name), update the fields, and tap Save.',
+      ),
+      _FaqItem(
+        'How do I change the app language?',
+        'Go to More → Language, pick your preferred language from the list — the whole app updates immediately.',
+      ),
+      _FaqItem(
+        'How do I log out of GBook?',
+        'Open Profile → scroll down and tap Logout, then confirm.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.bar_chart_outlined,
+    title: 'Reports',
+    subtitle: 'View monthly summaries and totals',
+    items: const [
+      _FaqItem(
+        'How do I view my monthly report?',
+        'Go to Reports (from the Parties screen or Bills header "VIEW REPORTS"), select the year and month to see total given, received and net balance.',
+      ),
+      _FaqItem(
+        'What is shown in "Overall Summary"?',
+        'It shows your all-time totals for amount given and amount received across every recorded transaction.',
+      ),
+      _FaqItem(
+        'Can I see monthly sales and purchases separately?',
+        'Yes — tap the Monthly Sales or Monthly Purchases card on the Bills screen header to open a detailed breakdown.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.lock_outline,
+    title: 'App Lock & Security',
+    subtitle: 'Protect your data with a PIN',
+    items: const [
+      _FaqItem(
+        'How do I enable App Lock?',
+        'Go to More → Settings → App Lock, turn it on and set a 4-digit PIN. The app will now ask for this PIN every time it\'s opened.',
+      ),
+      _FaqItem(
+        'What if I forget my App Lock PIN?',
+        'From the unlock screen, use the "Forgot PIN" option if available, or contact support via Call Us / WhatsApp for help resetting it.',
+      ),
+      _FaqItem(
+        'How do I change or turn off my PIN?',
+        'Go to More → Settings → App Lock, tap the row, and follow the prompts to change your PIN or turn the lock off.',
+      ),
+    ],
+  ),
+  _FaqCategory(
+    icon: Icons.cloud_outlined,
+    title: 'Data Backup',
+    subtitle: 'Know how to backup or restore your data',
+    items: const [
+      _FaqItem(
+        'Is my data backed up automatically?',
+        'Yes, your data is automatically backed up whenever your phone has an internet connection.',
+      ),
+      _FaqItem(
+        'I got a new phone — how do I get my data back?',
+        'Install GBook on the new device and log in with the same registered phone number. Your customers, bills, items and reports will be restored automatically.',
+      ),
+      _FaqItem(
+        'What happens if I delete the app by mistake?',
+        'Simply reinstall GBook and log in again with your registered number — all your data is safely restored from backup.',
+      ),
+    ],
+  ),
+];
+
+class _FaqCategoriesScreen extends StatelessWidget {
+  const _FaqCategoriesScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: AppTheme.primaryColor,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'FAQs',
+          style: TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
+        ),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _kFaqCategories.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (_, i) {
+                final cat = _kFaqCategories[i];
+                return InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _FaqDetailScreen(category: cat),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(cat.icon,
+                            color: AppTheme.primaryColor, size: 22),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(cat.title,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      color: Color(0xFF212121))),
+                              const SizedBox(height: 2),
+                              Text(cat.subtitle,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF9E9E9E))),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right,
+                            color: Color(0xFF9E9E9E)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: MediaQuery.of(context).padding.bottom + 12,
+            ),
+            child: Column(
+              children: [
+                const Text("Didn't find your question?",
+                    style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => MoreScreenSupportActions
+                            .openWhatsAppFromContext(context),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: const Text('CHAT WITH US'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Call Us'),
+                            content: const Text(
+                                'Support: +91 1800-000-000\n(Mon–Sat, 9 AM – 7 PM)'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Close')),
+                            ],
+                          ),
+                        ),
+                        icon: const Icon(Icons.call_outlined, size: 18),
+                        label: const Text('CALL US'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.primaryColor,
+                          side:
+                              const BorderSide(color: AppTheme.primaryColor),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FaqDetailScreen extends StatelessWidget {
+  final _FaqCategory category;
+  const _FaqDetailScreen({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: AppTheme.primaryColor,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          category.title,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+        ),
+        elevation: 0,
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: category.items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final item = category.items[i];
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+              childrenPadding:
+                  const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              title: Text(
+                item.question,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Color(0xFF212121)),
+              ),
+              expandedAlignment: Alignment.centerLeft,
+              children: [
+                Text(
+                  item.answer,
+                  style: const TextStyle(
+                      fontSize: 13, color: Color(0xFF616161), height: 1.4),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// Shared helper so both the accordion row and the FAQ screen's
+// "CHAT WITH US" button use the exact same WhatsApp-launch logic.
+class MoreScreenSupportActions {
+  MoreScreenSupportActions._();
+
+  static Future<void> openWhatsAppFromContext(BuildContext context) async {
+    const supportPhone = '911800000000';
+    const message = 'Hi, I need help with GBook.';
+    final encodedMsg = Uri.encodeComponent(message);
+
+    final waAppUri =
+        Uri.parse('whatsapp://send?phone=$supportPhone&text=$encodedMsg');
+    final waWebUri =
+        Uri.parse('https://wa.me/$supportPhone?text=$encodedMsg');
+
+    try {
+      if (await canLaunchUrl(waAppUri)) {
+        final launched =
+            await launchUrl(waAppUri, mode: LaunchMode.externalApplication);
+        if (launched) return;
+      }
+    } catch (_) {}
+
+    try {
+      final launched =
+          await launchUrl(waWebUri, mode: LaunchMode.externalApplication);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open WhatsApp')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('WhatsApp is not installed')),
+        );
+      }
+    }
   }
 }
