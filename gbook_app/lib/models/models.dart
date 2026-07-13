@@ -517,7 +517,6 @@ class Item {
   final DateTime createdAt;
   final String bookId;
 
-  // ── Extended fields used by items_screen ──────────────────────────────────
   final bool isService;
   final String? hsnCode;
   final double gstRate;
@@ -542,7 +541,6 @@ class Item {
     this.imagePath,
   });
 
-  /// True when stock is tracked and has fallen below [lowStockThreshold].
   bool get isLowStock =>
       !isService && stock != null && stock! <= lowStockThreshold;
 
@@ -562,7 +560,6 @@ class Item {
     double? gstRate,
     double? lowStockThreshold,
     String? imagePath,
-    // Pass clearImage: true to explicitly set imagePath → null
     bool clearImage = false,
   }) {
     return Item(
@@ -729,6 +726,12 @@ class Bill {
   final DateTime createdAt;
   final String bookId;
 
+  // ── Recycle Bin support ──────────────────────────────────────────────────
+  // null = active bill. Non-null = soft-deleted at this timestamp; the bill
+  // stays queryable via LocalDatabase.getDeletedBills() for 30 days before
+  // being purged, matching Khatabook's Recycle Bin behavior.
+  final DateTime? deletedAt;
+
   const Bill({
     required this.id,
     required this.billNumber,
@@ -746,11 +749,24 @@ class Bill {
     required this.date,
     required this.createdAt,
     this.bookId = '',
+    this.deletedAt,
   });
 
   double get balanceDue => grandTotal - paidAmount;
   bool get isPaid => balanceDue <= 0;
   double get totalAmount => grandTotal;
+
+  /// True when this bill is sitting in the Recycle Bin.
+  bool get isDeleted => deletedAt != null;
+
+  /// Days remaining before this bill is permanently purged from the
+  /// Recycle Bin (30-day retention window, same as Khatabook).
+  int get daysLeftInRecycleBin {
+    if (deletedAt == null) return 30;
+    final elapsed = DateTime.now().difference(deletedAt!).inDays;
+    final left = 30 - elapsed;
+    return left < 0 ? 0 : left;
+  }
 
   String get paymentStatus {
     if (isPaid) return PaymentStatus.paid;
@@ -775,6 +791,9 @@ class Bill {
     DateTime? date,
     DateTime? createdAt,
     String? bookId,
+    DateTime? deletedAt,
+    // Pass clearDeletedAt: true to explicitly restore (set deletedAt → null)
+    bool clearDeletedAt = false,
   }) {
     return Bill(
       id: id ?? this.id,
@@ -793,6 +812,7 @@ class Bill {
       date: date ?? this.date,
       createdAt: createdAt ?? this.createdAt,
       bookId: bookId ?? this.bookId,
+      deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
     );
   }
 
@@ -812,6 +832,7 @@ class Bill {
         'date': date.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
         'bookId': bookId,
+        'deletedAt': deletedAt?.toIso8601String(),
       };
 
   Map<String, dynamic> toJson() => toMap();
@@ -840,6 +861,9 @@ class Bill {
       date: DateTime.parse(map['date'] as String),
       createdAt: DateTime.parse(map['createdAt'] as String),
       bookId: (map['bookId'] as String?) ?? '',
+      deletedAt: map['deletedAt'] != null
+          ? DateTime.parse(map['deletedAt'] as String)
+          : null,
     );
   }
 
@@ -863,4 +887,201 @@ class MonthlyReport {
   });
 
   double get netBalance => totalDebit - totalCredit;
+}
+// ── Staff ─────────────────────────────────────────────────────────────────────
+enum SalaryType { monthly, daily }
+
+enum PartyPermissionLevel { none, viewAndRemind, addAndView, fullAccess }
+
+enum AttendanceStatus { present, absent, halfDay, paidLeave }
+
+extension AttendanceStatusX on AttendanceStatus {
+  String get shortCode {
+    switch (this) {
+      case AttendanceStatus.present:
+        return 'P';
+      case AttendanceStatus.absent:
+        return 'A';
+      case AttendanceStatus.halfDay:
+        return 'H';
+      case AttendanceStatus.paidLeave:
+        return 'PL';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case AttendanceStatus.present:
+        return 'Present';
+      case AttendanceStatus.absent:
+        return 'Absent';
+      case AttendanceStatus.halfDay:
+        return 'Half Day';
+      case AttendanceStatus.paidLeave:
+        return 'Paid Leave';
+    }
+  }
+
+  /// Fraction of a day's pay this status earns.
+  double get payMultiplier {
+    switch (this) {
+      case AttendanceStatus.present:
+        return 1.0;
+      case AttendanceStatus.paidLeave:
+        return 1.0;
+      case AttendanceStatus.halfDay:
+        return 0.5;
+      case AttendanceStatus.absent:
+        return 0.0;
+    }
+  }
+}
+
+class Staff {
+  final String id;
+  final String name;
+  final String phone;
+  final SalaryType salaryType;
+  final double salaryAmount;
+  final DateTime salaryStartDate;
+  final bool permissionsEnabled;
+  final bool fullPermission;
+  final PartyPermissionLevel partyPermission;
+  final DateTime createdAt;
+  final String bookId;
+
+  const Staff({
+    required this.id,
+    required this.name,
+    this.phone = '',
+    this.salaryType = SalaryType.monthly,
+    required this.salaryAmount,
+    required this.salaryStartDate,
+    this.permissionsEnabled = false,
+    this.fullPermission = false,
+    this.partyPermission = PartyPermissionLevel.none,
+    required this.createdAt,
+    this.bookId = '',
+  });
+
+  String get salaryTypeLabel =>
+      salaryType == SalaryType.monthly ? 'Monthly Salary' : 'Daily Salary';
+
+  Staff copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    SalaryType? salaryType,
+    double? salaryAmount,
+    DateTime? salaryStartDate,
+    bool? permissionsEnabled,
+    bool? fullPermission,
+    PartyPermissionLevel? partyPermission,
+    DateTime? createdAt,
+    String? bookId,
+  }) {
+    return Staff(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      salaryType: salaryType ?? this.salaryType,
+      salaryAmount: salaryAmount ?? this.salaryAmount,
+      salaryStartDate: salaryStartDate ?? this.salaryStartDate,
+      permissionsEnabled: permissionsEnabled ?? this.permissionsEnabled,
+      fullPermission: fullPermission ?? this.fullPermission,
+      partyPermission: partyPermission ?? this.partyPermission,
+      createdAt: createdAt ?? this.createdAt,
+      bookId: bookId ?? this.bookId,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'salaryType': salaryType.name,
+        'salaryAmount': salaryAmount,
+        'salaryStartDate': salaryStartDate.toIso8601String(),
+        'permissionsEnabled': permissionsEnabled ? 1 : 0,
+        'fullPermission': fullPermission ? 1 : 0,
+        'partyPermission': partyPermission.name,
+        'createdAt': createdAt.toIso8601String(),
+        'bookId': bookId,
+      };
+
+  Map<String, dynamic> toJson() => toMap();
+
+  factory Staff.fromMap(Map<String, dynamic> map) => Staff(
+        id: map['id'] as String,
+        name: map['name'] as String,
+        phone: (map['phone'] as String?) ?? '',
+        salaryType: SalaryType.values.firstWhere(
+          (e) => e.name == map['salaryType'],
+          orElse: () => SalaryType.monthly,
+        ),
+        salaryAmount: (map['salaryAmount'] as num?)?.toDouble() ?? 0,
+        salaryStartDate: DateTime.parse(map['salaryStartDate'] as String),
+        permissionsEnabled: ((map['permissionsEnabled'] as int?) ?? 0) == 1,
+        fullPermission: ((map['fullPermission'] as int?) ?? 0) == 1,
+        partyPermission: PartyPermissionLevel.values.firstWhere(
+          (e) => e.name == map['partyPermission'],
+          orElse: () => PartyPermissionLevel.none,
+        ),
+        createdAt: DateTime.parse(map['createdAt'] as String),
+        bookId: (map['bookId'] as String?) ?? '',
+      );
+}
+
+class StaffAttendance {
+  final String id;
+  final String staffId;
+  final DateTime date; // always stored normalized (time stripped)
+  final AttendanceStatus status;
+  final String bookId;
+
+  const StaffAttendance({
+    required this.id,
+    required this.staffId,
+    required this.date,
+    required this.status,
+    this.bookId = '',
+  });
+
+  static DateTime normalize(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  StaffAttendance copyWith({
+    String? id,
+    String? staffId,
+    DateTime? date,
+    AttendanceStatus? status,
+    String? bookId,
+  }) {
+    return StaffAttendance(
+      id: id ?? this.id,
+      staffId: staffId ?? this.staffId,
+      date: date ?? this.date,
+      status: status ?? this.status,
+      bookId: bookId ?? this.bookId,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'staffId': staffId,
+        'date': normalize(date).toIso8601String(),
+        'status': status.name,
+        'bookId': bookId,
+      };
+
+  factory StaffAttendance.fromMap(Map<String, dynamic> map) =>
+      StaffAttendance(
+        id: map['id'] as String,
+        staffId: map['staffId'] as String,
+        date: DateTime.parse(map['date'] as String),
+        status: AttendanceStatus.values.firstWhere(
+          (e) => e.name == map['status'],
+          orElse: () => AttendanceStatus.present,
+        ),
+        bookId: (map['bookId'] as String?) ?? '',
+      );
 }

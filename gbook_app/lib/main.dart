@@ -24,10 +24,6 @@ class GBookApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // FIX: LocaleProvider is now registered and initialized. Without
-        // this, the app never knew which language to show and
-        // AppLocalizations.of(context) always fell back to English no
-        // matter what the user picked in LanguageScreen.
         ChangeNotifierProvider(create: (_) => LocaleProvider()..init()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(
@@ -40,14 +36,10 @@ class GBookApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BillProvider()..loadBills()),
         ChangeNotifierProvider(
             create: (_) => CashbookProvider()..loadEntries()),
+        // NEW: powers the Staff feature (add/edit staff, attendance, salary due)
+        ChangeNotifierProvider(create: (_) => StaffProvider()..loadStaff()),
       ],
       child: Consumer<LocaleProvider>(
-        // FIX: Consumer here means the *entire* MaterialApp (and therefore
-        // every screen below it) rebuilds whenever LocaleProvider calls
-        // notifyListeners() — i.e. the instant the user taps a language
-        // tile in LanguageScreen. This is what actually makes "tap a
-        // language → whole app changes" work, instead of just changing
-        // one screen's local state.
         builder: (context, localeProvider, _) {
           return MaterialApp(
             title: 'GBook',
@@ -97,9 +89,6 @@ class _RootRedirect extends StatefulWidget {
 class _RootRedirectState extends State<_RootRedirect> {
   bool _splashDone = false;
   bool _isLoggedIn = false;
-  // FIX: When the user is logged in and App Lock is enabled, we hold the
-  // app on the PIN unlock screen right after splash, before showing
-  // HomeScreen — matching the Khatabook-style "Unlock" flow.
   bool _needsUnlock = false;
 
   Future<void> onSplashComplete(bool isLoggedIn) async {
@@ -136,9 +125,3 @@ class _RootRedirectState extends State<_RootRedirect> {
     return SplashScreen(onComplete: onSplashComplete);
   }
 }
-
-// FIX: Make sure pubspec.yaml has this under dependencies:
-//   flutter_localizations:
-//     sdk: flutter
-// This gives correct built-in "OK"/"Cancel" text, date pickers, etc. in
-// each supported language automatically.

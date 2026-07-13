@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
+import '../models/models.dart';
+import '../services/local_database.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import 'collection_screen.dart';
@@ -14,7 +16,9 @@ import 'sms_settings_screen.dart';
 import 'payment_settings_screen.dart';
 import 'language_screen.dart';
 import 'app_lock_screen.dart';
+import 'delete_khata_screen.dart';
 import '../services/app_lock_service.dart';
+import 'manage_staff_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   final void Function(int tabIndex)? onNavigateToTab;
@@ -246,12 +250,25 @@ class MoreScreen extends StatelessWidget {
                     if (onNavigateToTab != null) onNavigateToTab!(2);
                   },
                 ),
+                // FIX: this used to be a stray method declaration
+                // (`_void _showStaffScreen(...) { ... },`) sitting inside
+                // the widget list, which is invalid Dart syntax. It is now
+                // a proper _FeatureCard that calls the existing
+                // _showStaffScreen(context) method defined below.
                 _FeatureCard(
                   icon: Icons.people_alt_outlined,
                   iconColor: const Color(0xFF2E7D32),
                   iconBg: const Color(0xFFE8F5E9),
                   label: 'Staff',
-                  onTap: () => _showStaffScreen(context),
+                  // FIX: was calling the old placeholder _showStaffScreen()
+                  // bottom sheet ("Add Staff from Contacts" -> fake "coming
+                  // soon!" snackbar). Now opens the real, fully working
+                  // ManageStaffScreen (attendance, salary due, permissions).
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ManageStaffScreen()),
+                  ),
                 ),
                 _FeatureCard(
                   icon: Icons.calendar_month_outlined,
@@ -327,6 +344,9 @@ class MoreScreen extends StatelessWidget {
                         onTap: () => _showBackupInfo(context),
                       ),
                       _AccordionRow(
+                        // FIX: opens the real Delete Khata flow (type-to-
+                        // confirm → soft delete → Recycle Bin) instead of a
+                        // "contact support" dead end.
                         label: 'Delete Khata',
                         onTap: () => _confirmDeleteKhata(context),
                       ),
@@ -471,51 +491,7 @@ class MoreScreen extends StatelessWidget {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (_, ctrl) => Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.delete_outline,
-                      color: Color(0xFF424242)),
-                  const SizedBox(width: 10),
-                  const Text('Recycle Bin',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 16)),
-                  const Spacer(),
-                  IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                controller: ctrl,
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Icon(Icons.delete_sweep_outlined,
-                      size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Deleted parties, bills and items will appear here for 30 days before being permanently removed.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 16),
-                  const Center(child: Text('Recycle bin is empty')),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      builder: (_) => const _RecycleBinSheet(),
     );
   }
 
@@ -538,31 +514,13 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
+  // FIX: navigates to the real DeleteKhataScreen (type-to-confirm) instead
+  // of showing a static "contact support" dialog with no actual delete
+  // logic behind it.
   void _confirmDeleteKhata(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Khata'),
-        content: const Text(
-            'This will permanently delete all your business data including parties, bills, items and reports. This action cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content:
-                        Text('Please contact support to delete your khata')),
-              );
-            },
-            child:
-                const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DeleteKhataScreen()),
     );
   }
 
@@ -917,6 +875,258 @@ class MoreScreen extends StatelessWidget {
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Recycle Bin sheet ─────────────────────────────────────────────────────────
+// FIX: was a static "Recycle bin is empty" placeholder with no query behind
+// it. Now actually loads soft-deleted khatas (business_profile.deletedAt)
+// and soft-deleted bills (bills.deletedAt) and lets the user restore either.
+class _RecycleBinSheet extends StatefulWidget {
+  const _RecycleBinSheet();
+
+  @override
+  State<_RecycleBinSheet> createState() => _RecycleBinSheetState();
+}
+
+class _RecycleBinSheetState extends State<_RecycleBinSheet> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _deletedBooks = [];
+  List<Bill> _deletedBills = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final books = await LocalDatabase.instance.getDeletedBusinessProfiles();
+    final bills = await LocalDatabase.instance.getDeletedBills();
+    if (!mounted) return;
+    setState(() {
+      _deletedBooks = books;
+      _deletedBills = bills;
+      _loading = false;
+    });
+  }
+
+  int _daysLeft(String? deletedAtIso) {
+    if (deletedAtIso == null) return 30;
+    final deletedAt = DateTime.tryParse(deletedAtIso);
+    if (deletedAt == null) return 30;
+    final elapsed = DateTime.now().difference(deletedAt).inDays;
+    final left = 30 - elapsed;
+    return left < 0 ? 0 : left;
+  }
+
+  Future<void> _restoreBook(String id) async {
+    await LocalDatabase.instance.restoreBusinessProfile(id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Khata restored')),
+    );
+    await context.read<AuthProvider>().checkAuth();
+    _load();
+  }
+
+  Future<void> _restoreBill(String id) async {
+    await LocalDatabase.instance.restoreBill(id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Bill restored')),
+    );
+    context.read<BillProvider>().loadBills();
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = _deletedBooks.isEmpty && _deletedBills.isEmpty;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (_, ctrl) => Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.delete_outline, color: Color(0xFF424242)),
+                const SizedBox(width: 10),
+                const Text('Recycle Bin',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                const Spacer(),
+                IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : isEmpty
+                    ? ListView(
+                        controller: ctrl,
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          Icon(Icons.delete_sweep_outlined,
+                              size: 48, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Deleted khatas and bills will appear here for '
+                            '30 days before being permanently removed.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 16),
+                          const Center(child: Text('Recycle bin is empty')),
+                        ],
+                      )
+                    : ListView(
+                        controller: ctrl,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        children: [
+                          if (_deletedBooks.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: Text('Khatas',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: Color(0xFF757575))),
+                            ),
+                            ..._deletedBooks.map((b) => Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5F5F5),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.primaryColor
+                                              .withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                            Icons.book_outlined,
+                                            color: AppTheme.primaryColor,
+                                            size: 20),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              (b['businessName']
+                                                      as String?) ??
+                                                  'Untitled Khata',
+                                              style: const TextStyle(
+                                                  fontWeight:
+                                                      FontWeight.w600,
+                                                  fontSize: 14),
+                                            ),
+                                            Text(
+                                              '${_daysLeft(b['deletedAt'] as String?)} days left',
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF9E9E9E)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            _restoreBook(b['id'] as String),
+                                        child: const Text('RESTORE'),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                          ],
+                          if (_deletedBills.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: Text('Bills',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: Color(0xFF757575))),
+                            ),
+                            ..._deletedBills.map((bill) => Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5F5F5),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.debitColor
+                                              .withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: const Icon(
+                                            Icons.receipt_long_outlined,
+                                            color: AppTheme.debitColor,
+                                            size: 20),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              bill.billNumber,
+                                              style: const TextStyle(
+                                                  fontWeight:
+                                                      FontWeight.w600,
+                                                  fontSize: 14),
+                                            ),
+                                            Text(
+                                              '${bill.daysLeftInRecycleBin} days left',
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF9E9E9E)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            _restoreBill(bill.id),
+                                        child: const Text('RESTORE'),
+                                      ),
+                                    ],
+                                  ),
+                                )),
+                          ],
+                        ],
+                      ),
+          ),
         ],
       ),
     );

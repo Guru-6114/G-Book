@@ -1,6 +1,6 @@
 // lib/services/local_database.dart
 // ─────────────────────────────────────────────────────────────────────────────
-// SQLite local database for GBook app — multi-khatabook support
+// SQLite local database for GBook app — multi-khatabook support + Staff
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -24,9 +24,9 @@ class LocalDatabase {
 
   static Database? _db;
 
-  // Bumped to 4 so devices stuck on a broken/partial v2 or v3 database
-  // (missing isActive/bookId columns) are forced through onUpgrade again.
-  static const int _dbVersion = 4;
+  // Bumped to 7: adds `staff` and `staff_attendance` tables for the Staff
+  // Management feature (add staff, permissions, daily attendance, salary due).
+  static const int _dbVersion = 7;
 
   Future<Database> get database async {
     _db ??= await _initDb();
@@ -44,7 +44,7 @@ class LocalDatabase {
     );
     // Safety net: even if version numbers matched (e.g. a previous failed
     // upgrade left the user_version already bumped, so onUpgrade never
-    // re-ran), make sure every column we depend on actually exists.
+    // re-ran), make sure every table/column we depend on actually exists.
     await _ensureSchema(db);
     return db;
   }
@@ -62,7 +62,8 @@ class LocalDatabase {
         gstin TEXT,
         category TEXT,
         createdAt TEXT NOT NULL,
-        isActive INTEGER NOT NULL DEFAULT 0
+        isActive INTEGER NOT NULL DEFAULT 0,
+        deletedAt TEXT
       )
     ''');
 
@@ -153,6 +154,7 @@ class LocalDatabase {
       )
     ''');
 
+    // bills table — includes deletedAt for Recycle Bin (soft-delete) support.
     await db.execute('''
       CREATE TABLE bills (
         id TEXT PRIMARY KEY,
@@ -169,7 +171,8 @@ class LocalDatabase {
         notes TEXT,
         date TEXT NOT NULL,
         createdAt TEXT NOT NULL,
-        bookId TEXT NOT NULL DEFAULT ''
+        bookId TEXT NOT NULL DEFAULT '',
+        deletedAt TEXT
       )
     ''');
 
@@ -187,6 +190,34 @@ class LocalDatabase {
         FOREIGN KEY (billId) REFERENCES bills(id)
       )
     ''');
+
+    // ── Staff (NEW) ──────────────────────────────────────────────────────────
+    await db.execute('''
+      CREATE TABLE staff (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL DEFAULT '',
+        salaryType TEXT NOT NULL DEFAULT 'monthly',
+        salaryAmount REAL NOT NULL DEFAULT 0,
+        salaryStartDate TEXT NOT NULL,
+        permissionsEnabled INTEGER NOT NULL DEFAULT 0,
+        fullPermission INTEGER NOT NULL DEFAULT 0,
+        partyPermission TEXT NOT NULL DEFAULT 'none',
+        createdAt TEXT NOT NULL,
+        bookId TEXT NOT NULL DEFAULT ''
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE staff_attendance (
+        id TEXT PRIMARY KEY,
+        staffId TEXT NOT NULL,
+        date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'present',
+        bookId TEXT NOT NULL DEFAULT '',
+        FOREIGN KEY (staffId) REFERENCES staff(id)
+      )
+    ''');
   }
 
   // ── Incremental migrations ────────────────────────────────────────────────
@@ -196,7 +227,6 @@ class LocalDatabase {
       await _safeAlter(db,
           'ALTER TABLE business_profile ADD COLUMN isActive INTEGER NOT NULL DEFAULT 0');
 
-      // Mark first profile as active
       final profiles = await db.query('business_profile', limit: 1);
       if (profiles.isNotEmpty) {
         await db.update('business_profile', {'isActive': 1},
@@ -229,20 +259,58 @@ class LocalDatabase {
       await _safeAlter(db, 'ALTER TABLE items ADD COLUMN imagePath TEXT');
     }
 
-    // v3 → v4: no schema change here — this bump exists purely to force
-    // _ensureSchema() to run on devices whose onUpgrade silently failed
-    // before (e.g. interrupted upgrade, or app reinstalled mid-migration).
+    // v3 → v4: no schema change — bump exists purely to force
+    // _ensureSchema() to run on devices whose onUpgrade silently failed.
+
+    // v4 → v5: add deletedAt to bills (Recycle Bin).
+    if (oldVersion < 5) {
+      await _safeAlter(db, 'ALTER TABLE bills ADD COLUMN deletedAt TEXT');
+    }
+
+    // v5 → v6: add deletedAt to business_profile (Delete Khata Recycle Bin).
+    if (oldVersion < 6) {
+      await _safeAlter(
+          db, 'ALTER TABLE business_profile ADD COLUMN deletedAt TEXT');
+    }
+
+    // v6 → v7 (NEW): create `staff` and `staff_attendance` tables for the
+    // Staff Management feature.
+    if (oldVersion < 7) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS staff (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          phone TEXT NOT NULL DEFAULT '',
+          salaryType TEXT NOT NULL DEFAULT 'monthly',
+          salaryAmount REAL NOT NULL DEFAULT 0,
+          salaryStartDate TEXT NOT NULL,
+          permissionsEnabled INTEGER NOT NULL DEFAULT 0,
+          fullPermission INTEGER NOT NULL DEFAULT 0,
+          partyPermission TEXT NOT NULL DEFAULT 'none',
+          createdAt TEXT NOT NULL,
+          bookId TEXT NOT NULL DEFAULT ''
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS staff_attendance (
+          id TEXT PRIMARY KEY,
+          staffId TEXT NOT NULL,
+          date TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'present',
+          bookId TEXT NOT NULL DEFAULT '',
+          FOREIGN KEY (staffId) REFERENCES staff(id)
+        )
+      ''');
+    }
   }
 
   /// Runs an ALTER TABLE, swallowing "duplicate column" errors only.
-  /// Re-throws anything unexpected so real failures aren't hidden.
   Future<void> _safeAlter(Database db, String sql) async {
     try {
       await db.execute(sql);
     } catch (e) {
       final msg = e.toString().toLowerCase();
       if (!msg.contains('duplicate column')) {
-        // Not the "already exists" case — log but don't crash startup.
         // ignore: avoid_print
         print('Schema alter warning: $sql -> $e');
       }
@@ -255,19 +323,25 @@ class LocalDatabase {
     return info.map((row) => row['name'] as String).toSet();
   }
 
-  /// Defensive self-heal: guarantees every column the app code reads/writes
-  /// actually exists, regardless of what the stored user_version claims.
-  /// This is what prevents the exact crash you hit:
-  /// "no such column: isActive ... SELECT * FROM business_profile".
+  /// Whether a table with this name currently exists.
+  Future<bool> _tableExists(Database db, String name) async {
+    final res = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+      [name],
+    );
+    return res.isNotEmpty;
+  }
+
+  /// Defensive self-heal: guarantees every table/column the app code
+  /// reads/writes actually exists, regardless of what the stored
+  /// user_version claims.
   Future<void> _ensureSchema(Database db) async {
     final bpCols = await _columnsOf(db, 'business_profile');
     if (!bpCols.contains('isActive')) {
       await _safeAlter(db,
           'ALTER TABLE business_profile ADD COLUMN isActive INTEGER NOT NULL DEFAULT 0');
-      // If nothing is marked active yet, activate the first profile so
-      // getBusinessProfile() can find it.
-      final activeCount = await db
-          .rawQuery('SELECT COUNT(*) as c FROM business_profile WHERE isActive = 1');
+      final activeCount = await db.rawQuery(
+          'SELECT COUNT(*) as c FROM business_profile WHERE isActive = 1');
       final hasActive = ((activeCount.first['c'] as int?) ?? 0) > 0;
       if (!hasActive) {
         final profiles = await db.query('business_profile', limit: 1);
@@ -276,6 +350,10 @@ class LocalDatabase {
               where: 'id = ?', whereArgs: [profiles.first['id']]);
         }
       }
+    }
+    if (!bpCols.contains('deletedAt')) {
+      await _safeAlter(
+          db, 'ALTER TABLE business_profile ADD COLUMN deletedAt TEXT');
     }
 
     for (final table in [
@@ -313,6 +391,43 @@ class LocalDatabase {
     if (!itemCols.contains('imagePath')) {
       await _safeAlter(db, 'ALTER TABLE items ADD COLUMN imagePath TEXT');
     }
+
+    final billsCols = await _columnsOf(db, 'bills');
+    if (!billsCols.contains('deletedAt')) {
+      await _safeAlter(db, 'ALTER TABLE bills ADD COLUMN deletedAt TEXT');
+    }
+
+    // ── Staff (NEW) — create tables if a prior failed/skipped upgrade left
+    // them missing even though user_version says otherwise.
+    if (!await _tableExists(db, 'staff')) {
+      await db.execute('''
+        CREATE TABLE staff (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          phone TEXT NOT NULL DEFAULT '',
+          salaryType TEXT NOT NULL DEFAULT 'monthly',
+          salaryAmount REAL NOT NULL DEFAULT 0,
+          salaryStartDate TEXT NOT NULL,
+          permissionsEnabled INTEGER NOT NULL DEFAULT 0,
+          fullPermission INTEGER NOT NULL DEFAULT 0,
+          partyPermission TEXT NOT NULL DEFAULT 'none',
+          createdAt TEXT NOT NULL,
+          bookId TEXT NOT NULL DEFAULT ''
+        )
+      ''');
+    }
+    if (!await _tableExists(db, 'staff_attendance')) {
+      await db.execute('''
+        CREATE TABLE staff_attendance (
+          id TEXT PRIMARY KEY,
+          staffId TEXT NOT NULL,
+          date TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'present',
+          bookId TEXT NOT NULL DEFAULT '',
+          FOREIGN KEY (staffId) REFERENCES staff(id)
+        )
+      ''');
+    }
   }
 
   // ── BusinessProfile ───────────────────────────────────────────────────────
@@ -320,19 +435,16 @@ class LocalDatabase {
   Future<BusinessProfile?> getBusinessProfile() async {
     final db = await database;
     try {
-      final maps =
-          await db.query('business_profile', where: 'isActive = 1', limit: 1);
+      final maps = await db.query('business_profile',
+          where: 'isActive = 1 AND deletedAt IS NULL', limit: 1);
       if (maps.isNotEmpty) return BusinessProfile.fromMap(maps.first);
-      // No row marked active yet — fall back to the first profile, if any,
-      // rather than returning null and forcing the user back through setup.
-      final any = await db.query('business_profile', limit: 1);
+      final any = await db.query('business_profile',
+          where: 'deletedAt IS NULL', limit: 1);
       if (any.isEmpty) return null;
       await db.update('business_profile', {'isActive': 1},
           where: 'id = ?', whereArgs: [any.first['id']]);
       return BusinessProfile.fromMap(any.first);
     } catch (e) {
-      // Final safety net — if the isActive column is somehow still missing
-      // (shouldn't happen after _ensureSchema, but never crash auth flow).
       await _ensureSchema(db);
       final maps = await db.query('business_profile', limit: 1);
       if (maps.isEmpty) return null;
@@ -342,8 +454,8 @@ class LocalDatabase {
 
   Future<List<BusinessProfile>> getAllBusinessProfiles() async {
     final db = await database;
-    final maps =
-        await db.query('business_profile', orderBy: 'createdAt ASC');
+    final maps = await db.query('business_profile',
+        where: 'deletedAt IS NULL', orderBy: 'createdAt ASC');
     return maps.map((m) => BusinessProfile.fromMap(m)).toList();
   }
 
@@ -377,6 +489,88 @@ class LocalDatabase {
     await db.update('business_profile', {'isActive': 0});
     await db.update('business_profile', {'isActive': 1},
         where: 'id = ?', whereArgs: [bookId]);
+  }
+
+  // ── Khata (business profile) Recycle Bin ────────────────────────────────
+
+  Future<void> softDeleteBusinessProfile(String id) async {
+    final db = await database;
+    await db.update(
+      'business_profile',
+      {
+        'deletedAt': DateTime.now().toIso8601String(),
+        'isActive': 0,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> restoreBusinessProfile(String id) async {
+    final db = await database;
+    await db.update(
+      'business_profile',
+      {'deletedAt': null},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    final activeCount = await db.rawQuery(
+        'SELECT COUNT(*) as c FROM business_profile WHERE isActive = 1 AND deletedAt IS NULL');
+    final hasActive = ((activeCount.first['c'] as int?) ?? 0) > 0;
+    if (!hasActive) {
+      await db.update('business_profile', {'isActive': 1},
+          where: 'id = ?', whereArgs: [id]);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getDeletedBusinessProfiles() async {
+    await purgeExpiredDeletedBusinessProfiles();
+    final db = await database;
+    return db.query(
+      'business_profile',
+      where: 'deletedAt IS NOT NULL',
+      orderBy: 'deletedAt DESC',
+    );
+  }
+
+  Future<void> purgeExpiredDeletedBusinessProfiles() async {
+    final db = await database;
+    final cutoff =
+        DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
+    final expired = await db.query(
+      'business_profile',
+      where: 'deletedAt IS NOT NULL AND deletedAt < ?',
+      whereArgs: [cutoff],
+    );
+    for (final row in expired) {
+      await permanentlyDeleteBusinessProfile(row['id'] as String);
+    }
+  }
+
+  Future<void> permanentlyDeleteBusinessProfile(String bookId) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('customer_transactions',
+          where: 'bookId = ?', whereArgs: [bookId]);
+      await txn.delete('customers', where: 'bookId = ?', whereArgs: [bookId]);
+      await txn.delete('suppliers', where: 'bookId = ?', whereArgs: [bookId]);
+      await txn.delete('items', where: 'bookId = ?', whereArgs: [bookId]);
+      await txn.delete('app_transactions',
+          where: 'bookId = ?', whereArgs: [bookId]);
+      await txn.delete('cashbook_entries',
+          where: 'bookId = ?', whereArgs: [bookId]);
+      await txn.delete('staff', where: 'bookId = ?', whereArgs: [bookId]);
+
+      final billRows = await txn.query('bills',
+          columns: ['id'], where: 'bookId = ?', whereArgs: [bookId]);
+      for (final row in billRows) {
+        await txn.delete('bill_items',
+            where: 'billId = ?', whereArgs: [row['id']]);
+      }
+      await txn.delete('bills', where: 'bookId = ?', whereArgs: [bookId]);
+
+      await txn.delete('business_profile', where: 'id = ?', whereArgs: [bookId]);
+    });
   }
 
   // ── Customers ─────────────────────────────────────────────────────────────
@@ -553,7 +747,7 @@ class LocalDatabase {
     DateTime? to,
   }) async {
     final db = await database;
-    final conditions = <String>[];
+    final conditions = <String>['deletedAt IS NULL'];
     final args = <Object?>[];
     if (bookId.isNotEmpty) {
       conditions.add('bookId = ?');
@@ -573,8 +767,8 @@ class LocalDatabase {
     }
     final billMaps = await db.query(
       'bills',
-      where: conditions.isNotEmpty ? conditions.join(' AND ') : null,
-      whereArgs: args.isNotEmpty ? args : null,
+      where: conditions.join(' AND '),
+      whereArgs: args,
       orderBy: 'date DESC',
     );
     final bills = <Bill>[];
@@ -602,9 +796,74 @@ class LocalDatabase {
 
   Future<void> deleteBill(String id) async {
     final db = await database;
+    await db.update(
+      'bills',
+      {'deletedAt': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> restoreBill(String id) async {
+    final db = await database;
+    await db.update(
+      'bills',
+      {'deletedAt': null},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> permanentlyDeleteBill(String id) async {
+    final db = await database;
     await db.transaction((txn) async {
       await txn.delete('bill_items', where: 'billId = ?', whereArgs: [id]);
       await txn.delete('bills', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  Future<List<Bill>> getDeletedBills({String bookId = ''}) async {
+    await purgeExpiredDeletedBills();
+    final db = await database;
+    final conditions = <String>['deletedAt IS NOT NULL'];
+    final args = <Object?>[];
+    if (bookId.isNotEmpty) {
+      conditions.add('bookId = ?');
+      args.add(bookId);
+    }
+    final billMaps = await db.query(
+      'bills',
+      where: conditions.join(' AND '),
+      whereArgs: args,
+      orderBy: 'deletedAt DESC',
+    );
+    final bills = <Bill>[];
+    for (final bm in billMaps) {
+      final itemMaps = await db
+          .query('bill_items', where: 'billId = ?', whereArgs: [bm['id']]);
+      bills.add(
+        Bill.fromMap(bm, itemMaps.map((m) => BillItem.fromMap(m)).toList()),
+      );
+    }
+    return bills;
+  }
+
+  Future<void> purgeExpiredDeletedBills() async {
+    final db = await database;
+    final cutoff =
+        DateTime.now().subtract(const Duration(days: 30)).toIso8601String();
+    final expired = await db.query(
+      'bills',
+      where: 'deletedAt IS NOT NULL AND deletedAt < ?',
+      whereArgs: [cutoff],
+    );
+    if (expired.isEmpty) return;
+    await db.transaction((txn) async {
+      for (final row in expired) {
+        final id = row['id'] as String;
+        await txn.delete('bill_items', where: 'billId = ?', whereArgs: [id]);
+        await txn.delete('bills', where: 'id = ?', whereArgs: [id]);
+      }
     });
   }
 
@@ -663,5 +922,88 @@ class LocalDatabase {
   Future<void> deleteCashbookEntry(String id) async {
     final db = await database;
     await db.delete('cashbook_entries', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ── Staff (NEW) ─────────────────────────────────────────────────────────
+
+  Future<List<Staff>> getStaff(String bookId) async {
+    final db = await database;
+    final maps = await db.query(
+      'staff',
+      where: bookId.isEmpty ? null : 'bookId = ?',
+      whereArgs: bookId.isEmpty ? null : [bookId],
+      orderBy: 'name ASC',
+    );
+    return maps.map((m) => Staff.fromMap(m)).toList();
+  }
+
+  Future<void> insertStaff(Staff staff) async {
+    final db = await database;
+    await db.insert('staff', staff.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> updateStaff(Staff staff) async {
+    final db = await database;
+    await db.update('staff', staff.toMap(),
+        where: 'id = ?', whereArgs: [staff.id]);
+  }
+
+  Future<void> deleteStaff(String id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('staff_attendance',
+          where: 'staffId = ?', whereArgs: [id]);
+      await txn.delete('staff', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  // ── Staff Attendance (NEW) ───────────────────────────────────────────────
+
+  Future<List<StaffAttendance>> getAttendanceForStaff(String staffId) async {
+    final db = await database;
+    final maps = await db.query('staff_attendance',
+        where: 'staffId = ?', whereArgs: [staffId], orderBy: 'date DESC');
+    return maps.map((m) => StaffAttendance.fromMap(m)).toList();
+  }
+
+  /// Upserts one attendance record per (staff, day) — marking the same day
+  /// twice updates the existing record instead of creating a duplicate.
+  Future<void> setAttendance(StaffAttendance attendance) async {
+    final db = await database;
+    final normalizedDate =
+        StaffAttendance.normalize(attendance.date).toIso8601String();
+    final existing = await db.query(
+      'staff_attendance',
+      where: 'staffId = ? AND date = ?',
+      whereArgs: [attendance.staffId, normalizedDate],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) {
+      await db.update(
+        'staff_attendance',
+        attendance.copyWith(id: existing.first['id'] as String).toMap(),
+        where: 'id = ?',
+        whereArgs: [existing.first['id']],
+      );
+    } else {
+      await db.insert('staff_attendance', attendance.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  Future<List<StaffAttendance>> getAttendanceInRange(
+      String staffId, DateTime from, DateTime to) async {
+    final db = await database;
+    final maps = await db.query(
+      'staff_attendance',
+      where: 'staffId = ? AND date >= ? AND date <= ?',
+      whereArgs: [
+        staffId,
+        StaffAttendance.normalize(from).toIso8601String(),
+        StaffAttendance.normalize(to).toIso8601String(),
+      ],
+    );
+    return maps.map((m) => StaffAttendance.fromMap(m)).toList();
   }
 }

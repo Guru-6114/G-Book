@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
+import '../utils/helpers.dart';
 
 // ── AuthProvider ──────────────────────────────────────────────────────────────
 class AuthProvider extends ChangeNotifier {
@@ -666,5 +667,135 @@ class CashbookProvider extends ChangeNotifier {
     await LocalDatabase.instance.deleteCashbookEntry(id);
     _entries.removeWhere((e) => e.id == id);
     notifyListeners();
+  }
+}
+// ── StaffProvider (NEW) ───────────────────────────────────────────────────────
+class StaffProvider extends ChangeNotifier {
+  final List<Staff> _staff = [];
+  final Map<String, List<StaffAttendance>> _attendanceByStaff = {};
+  bool _loading = false;
+
+  List<Staff> get staff => List.unmodifiable(_staff);
+  bool get loading => _loading;
+
+  List<StaffAttendance> attendanceFor(String staffId) =>
+      List.unmodifiable(_attendanceByStaff[staffId] ?? []);
+
+  Future<void> loadStaff({String bookId = ''}) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      final list = await LocalDatabase.instance.getStaff(bookId);
+      _staff
+        ..clear()
+        ..addAll(list);
+      _attendanceByStaff.clear();
+      for (final s in list) {
+        _attendanceByStaff[s.id] =
+            await LocalDatabase.instance.getAttendanceForStaff(s.id);
+      }
+    } catch (e) {
+      debugPrint('loadStaff error: $e');
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> addStaff(Staff s) async {
+    await LocalDatabase.instance.insertStaff(s);
+    _staff.add(s);
+    _attendanceByStaff[s.id] = [];
+    notifyListeners();
+  }
+
+  Future<void> updateStaff(Staff s) async {
+    await LocalDatabase.instance.updateStaff(s);
+    final idx = _staff.indexWhere((e) => e.id == s.id);
+    if (idx != -1) _staff[idx] = s;
+    notifyListeners();
+  }
+
+  Future<void> deleteStaff(String id) async {
+    await LocalDatabase.instance.deleteStaff(id);
+    _staff.removeWhere((s) => s.id == id);
+    _attendanceByStaff.remove(id);
+    notifyListeners();
+  }
+
+  StaffAttendance? attendanceOn(String staffId, DateTime date) {
+    final norm = StaffAttendance.normalize(date);
+    final list = _attendanceByStaff[staffId] ?? [];
+    for (final a in list) {
+      final d = StaffAttendance.normalize(a.date);
+      if (d.year == norm.year && d.month == norm.month && d.day == norm.day) {
+        return a;
+      }
+    }
+    return null;
+  }
+
+  Future<void> markAttendance(
+      String staffId, DateTime date, AttendanceStatus status,
+      {String bookId = ''}) async {
+    final existing = attendanceOn(staffId, date);
+    final record = StaffAttendance(
+      id: existing?.id ?? AppHelpers.generateId(),
+      staffId: staffId,
+      date: date,
+      status: status,
+      bookId: bookId,
+    );
+    await LocalDatabase.instance.setAttendance(record);
+
+    final list = _attendanceByStaff.putIfAbsent(staffId, () => []);
+    final norm = StaffAttendance.normalize(date);
+    list.removeWhere((a) {
+      final d = StaffAttendance.normalize(a.date);
+      return d.year == norm.year && d.month == norm.month && d.day == norm.day;
+    });
+    list.add(record);
+    notifyListeners();
+  }
+
+  /// Total amount currently due to [s], based on every recorded attendance
+  /// day since the staff's salary-calculation start date.
+  /// Monthly salary is pro-rated per day using the number of days in the
+  /// start-date's month; daily salary uses the amount directly per day.
+  double dueFor(Staff s) {
+    final startNorm = StaffAttendance.normalize(s.salaryStartDate);
+    final records =
+        (_attendanceByStaff[s.id] ?? []).where((a) => !a.date.isBefore(startNorm));
+
+    double perDayRate;
+    if (s.salaryType == SalaryType.monthly) {
+      final daysInMonth =
+          DateTime(s.salaryStartDate.year, s.salaryStartDate.month + 1, 0).day;
+      perDayRate = daysInMonth == 0 ? 0 : s.salaryAmount / daysInMonth;
+    } else {
+      perDayRate = s.salaryAmount;
+    }
+
+    double total = 0;
+    for (final r in records) {
+      total += perDayRate * r.status.payMultiplier;
+    }
+    return total;
+  }
+
+  /// Counts of Present / Absent / Half Day / Paid Leave across all loaded
+  /// staff for [date] (used in the Manage Staff header summary).
+  Map<AttendanceStatus, int> attendanceSummaryFor(DateTime date) {
+    final counts = <AttendanceStatus, int>{
+      AttendanceStatus.present: 0,
+      AttendanceStatus.absent: 0,
+      AttendanceStatus.halfDay: 0,
+      AttendanceStatus.paidLeave: 0,
+    };
+    for (final s in _staff) {
+      final a = attendanceOn(s.id, date);
+      if (a != null) counts[a.status] = (counts[a.status] ?? 0) + 1;
+    }
+    return counts;
   }
 }
