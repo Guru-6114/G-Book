@@ -45,3 +45,8 @@ app.*.map.json
 /android/app/release
 google-services.json
 lib/firebase_options.dart
+
+# Backend / Database
+gbook_backend/db.sqlite3
+gbook_backend/__pycache__/
+*.pyc

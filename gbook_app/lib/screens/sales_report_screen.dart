@@ -1,21 +1,4 @@
 // lib/screens/sales_report_screen.dart
-//
-// FIX 4 — Correct Net Sale / Net Purchase and Unpaid Balance:
-//
-// NET SALE / NET PURCHASE:
-//   = Sum of original bills - Sum of returns
-//   e.g. 3 sales (₹50 each = ₹150) - 6 returns (₹30 each = ₹180) = -₹30
-//   This is mathematically correct and matches real Khatabook behavior.
-//
-// UNPAID BALANCE:
-//   Only considers ORIGINAL bills (sale/purchase), NOT returns.
-//   Returns are always recorded as fully paid (paidAmount == grandTotal)
-//   so they never contribute to unpaid balance.
-//   Formula: sum of balanceDue for non-return bills only.
-//
-// FIX 3 — PDF currency: uses "Rs." instead of "₹" inside generated PDFs
-// because base-14 PDF fonts lack U+20B9.
-
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -28,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../providers/locale_provider.dart';
 import '../utils/helpers.dart';
 import '../theme/app_theme.dart';
 
@@ -35,16 +19,16 @@ import '../theme/app_theme.dart';
 enum _Period { thisMonth, lastMonth, thisYear, custom }
 
 extension _PeriodLabel on _Period {
-  String get label {
+  String label(LocaleProvider loc) {
     switch (this) {
       case _Period.thisMonth:
-        return 'This Month';
+        return loc.tr('period_this_month');
       case _Period.lastMonth:
-        return 'Last Month';
+        return loc.tr('period_last_month');
       case _Period.thisYear:
-        return 'This Year';
+        return loc.tr('period_this_year');
       case _Period.custom:
-        return 'Custom';
+        return loc.tr('period_custom');
     }
   }
 }
@@ -93,7 +77,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   static final _dateFmt = DateFormat('dd MMM yy');
   static final _fullDateFmt = DateFormat('dd MMM yyyy');
 
-  String get _title => widget.isSales ? 'Sales Report' : 'Purchase Report';
+  String _title(LocaleProvider loc) =>
+      widget.isSales ? loc.tr('sales_report') : loc.tr('purchase_report');
 
   DateTimeRange get _range => _rangeFor(_period, custom: _customRange);
 
@@ -111,8 +96,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   }
 
   // ── FIX 4: Net Sale / Net Purchase ────────────────────────────────────────
-  // Net = (sum of original bills) - (sum of return bills)
-  // This gives a negative number when returns exceed sales — which is correct.
   double _netAmount(List<Bill> bills) {
     double total = 0;
     for (final b in bills) {
@@ -128,10 +111,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   }
 
   // ── FIX 4: Unpaid Balance ─────────────────────────────────────────────────
-  // Only counts balanceDue on ORIGINAL bills (sale/purchase).
-  // Returns are always created with paidAmount == grandTotal, so they
-  // contribute 0 to balanceDue — but we explicitly skip them to be safe.
-  // Never goes below 0.
   double _unpaidBalance(List<Bill> bills) {
     double total = 0;
     for (final b in bills) {
@@ -168,6 +147,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   }
 
   void _showPeriodPicker() {
+    final loc = context.read<LocaleProvider>();
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -175,17 +155,17 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       builder: (_) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('Select Period',
-                  style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              child: Text(loc.tr('select_period'),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700)),
             ),
           ),
           ..._Period.values.map((p) => ListTile(
-                title: Text(p.label),
+                title: Text(p.label(loc)),
                 trailing: _period == p
                     ? Icon(Icons.check, color: AppTheme.primaryColor)
                     : null,
@@ -217,7 +197,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     return 'Rs. $sign${av.toStringAsFixed(2)}';
   }
 
-  // On-screen amount formatter — keeps ₹ (Flutter renders it fine)
   String _fmtAmt(double v) {
     final sign = v < 0 ? '-' : '';
     final av = v.abs();
@@ -226,16 +205,18 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     return '${sign}₹${av.toStringAsFixed(2)}';
   }
 
-  Future<Uint8List> _buildPdf(List<Bill> bills, dynamic profile) async {
+  Future<Uint8List> _buildPdf(
+      List<Bill> bills, dynamic profile, LocaleProvider loc) async {
     final pdf = pw.Document();
     final businessName = profile?.businessName ?? 'My Business';
     final address = profile?.address ?? '';
     final phone = profile?.phone ?? '';
     final net = _netAmount(bills);
     final unpaid = _unpaidBalance(bills);
-    final label = widget.isSales ? 'NET SALE' : 'NET PURCHASE';
+    final label = widget.isSales ? loc.tr('net_sale') : loc.tr('net_purchase');
     final rangeStr =
         '${_fullDateFmt.format(_range.start)} - ${_fullDateFmt.format(_range.end)}';
+    final title = _title(loc);
 
     pdf.addPage(
       pw.MultiPage(
@@ -274,7 +255,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(_title,
+                pw.Text(title,
                     style: pw.TextStyle(
                         fontSize: 14, fontWeight: pw.FontWeight.bold)),
                 pw.Text('Period: $rangeStr',
@@ -283,14 +264,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               ],
             ),
             pw.SizedBox(height: 8),
-            // FIX 3: all amounts use Rs. not ₹
             pw.Row(
               children: [
-                _pdfStat('TRANSACTIONS', '${bills.length}', PdfColors.grey800),
+                _pdfStat(loc.tr('transactions'), '${bills.length}',
+                    PdfColors.grey800),
                 pw.SizedBox(width: 12),
                 _pdfStat(label, _fmtAmtPdf(net), PdfColors.green800),
                 pw.SizedBox(width: 12),
-                _pdfStat('UNPAID BALANCE', _fmtAmtPdf(unpaid),
+                _pdfStat(loc.tr('unpaid_balance'), _fmtAmtPdf(unpaid),
                     PdfColors.green800),
               ],
             ),
@@ -306,7 +287,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   fontSize: 9, color: PdfColors.grey500)),
         ),
         build: (ctx) => [
-          // Table header
           pw.Container(
             color: PdfColors.grey200,
             padding:
@@ -325,17 +305,16 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       bold: true, align: pw.TextAlign.center)),
             ]),
           ),
-          // Rows — FIX 3: use _fmtAmtPdf
           ...bills.map((b) {
             final isReturn = b.billType == BillType.saleReturn ||
                 b.billType == BillType.purchaseReturn;
             final statusColor =
                 b.isPaid ? PdfColors.green800 : PdfColors.red700;
             final statusLabel = b.isPaid
-                ? 'Fully Paid'
+                ? loc.tr('fully_paid')
                 : b.paidAmount > 0
-                    ? 'Partial'
-                    : 'Unpaid';
+                    ? loc.tr('partial')
+                    : loc.tr('unpaid');
             return pw.Container(
               decoration: const pw.BoxDecoration(
                   border: pw.Border(
@@ -357,7 +336,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                           style: const pw.TextStyle(
                               fontSize: 9, color: PdfColors.grey600)),
                       if (isReturn)
-                        pw.Text('(Return)',
+                        pw.Text(loc.tr('return_suffix'),
                             style: const pw.TextStyle(
                                 fontSize: 9, color: PdfColors.orange700)),
                     ],
@@ -386,7 +365,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             );
           }),
           pw.SizedBox(height: 16),
-          // Totals — FIX 3: Rs.
           pw.Container(
             color: PdfColors.grey100,
             padding: const pw.EdgeInsets.all(10),
@@ -396,7 +374,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                 pw.Text('$label: ${_fmtAmtPdf(net)}',
                     style: pw.TextStyle(
                         fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Unpaid: ${_fmtAmtPdf(unpaid)}',
+                pw.Text('${loc.tr('unpaid_balance')}: ${_fmtAmtPdf(unpaid)}',
                     style: pw.TextStyle(
                         fontSize: 12, fontWeight: pw.FontWeight.bold)),
               ],
@@ -462,19 +440,21 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
   Future<void> _downloadPdf(List<Bill> bills, dynamic profile) async {
     if (_isDownloading) return;
+    final loc = context.read<LocaleProvider>();
     setState(() => _isDownloading = true);
     try {
-      final bytes = await _buildPdf(bills, profile);
+      final bytes = await _buildPdf(bills, profile, loc);
       final file = await _savePdf(bytes);
       if (!mounted) return;
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/pdf')],
-        subject: _title,
+        subject: _title(loc),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(loc.trParams('failed_with_error',
+                {'error': e.toString()}))));
       }
     } finally {
       if (mounted) setState(() => _isDownloading = false);
@@ -483,37 +463,39 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
   Future<void> _shareWhatsApp(List<Bill> bills, dynamic profile) async {
     if (_isSharing) return;
+    final loc = context.read<LocaleProvider>();
     setState(() => _isSharing = true);
     try {
-      final bytes = await _buildPdf(bills, profile);
+      final bytes = await _buildPdf(bills, profile, loc);
       final file = await _savePdf(bytes);
       if (!mounted) return;
 
       final whatsappUri = Uri.parse('whatsapp://send?text=');
       final canWhatsApp = await canLaunchUrl(whatsappUri);
+      final title = _title(loc);
 
       if (canWhatsApp) {
         await Share.shareXFiles(
           [XFile(file.path, mimeType: 'application/pdf')],
-          subject: _title,
+          subject: title,
           text:
-              '$_title\nPeriod: ${_fullDateFmt.format(_range.start)} - ${_fullDateFmt.format(_range.end)}',
+              '$title\nPeriod: ${_fullDateFmt.format(_range.start)} - ${_fullDateFmt.format(_range.end)}',
         );
       } else {
         await Share.shareXFiles(
           [XFile(file.path, mimeType: 'application/pdf')],
-          subject: _title,
+          subject: title,
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content:
-                  Text('WhatsApp not found. Sharing via other apps.')));
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(loc.tr('whatsapp_not_found'))));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(loc.trParams('failed_with_error',
+                {'error': e.toString()}))));
       }
     } finally {
       if (mounted) setState(() => _isSharing = false);
@@ -522,13 +504,13 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final billProvider = context.watch<BillProvider>();
     final auth = context.watch<AuthProvider>();
     final bills = _filteredBills(billProvider.bills);
-    // FIX 4: use corrected calculation methods
     final net = _netAmount(bills);
     final unpaid = _unpaidBalance(bills);
-    final label = widget.isSales ? 'NET SALE' : 'NET PURCHASE';
+    final label = widget.isSales ? loc.tr('net_sale') : loc.tr('net_purchase');
     final rangeStart =
         _fullDateFmt.format(_range.start).toUpperCase();
     final rangeEnd = _fullDateFmt.format(_range.end).toUpperCase();
@@ -541,7 +523,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(_title,
+        title: Text(_title(loc),
             style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -573,7 +555,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         children: [
                           Flexible(
                             child: Text(
-                              _period.label,
+                              _period.label(loc),
                               style: const TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.w600),
                               overflow: TextOverflow.ellipsis,
@@ -592,7 +574,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   flex: 3,
                   child: GestureDetector(
                     onTap: _pickCustomRange,
-                    child: _DateBox(label: 'Start Date', date: rangeStart),
+                    child: _DateBox(
+                        label: loc.tr('start_date'), date: rangeStart),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -600,7 +583,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   flex: 3,
                   child: GestureDetector(
                     onTap: _pickCustomRange,
-                    child: _DateBox(label: 'End Date', date: rangeEnd),
+                    child:
+                        _DateBox(label: loc.tr('end_date'), date: rangeEnd),
                   ),
                 ),
               ],
@@ -608,7 +592,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           ),
           const Divider(height: 1),
 
-          // ── Stats row — FIX 4: uses corrected _fmtAmt ──────────────────
+          // ── Stats row ────────────────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(
@@ -617,7 +601,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               children: [
                 Expanded(
                   child: _StatChip(
-                      label: 'TRANSACTIONS',
+                      label: loc.tr('transactions'),
                       value: '${bills.length}',
                       valueColor: Colors.black87),
                 ),
@@ -625,7 +609,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   child: _StatChip(
                     label: label,
                     value: _fmtAmt(net),
-                    // FIX 4: show red when net is negative (more returns than sales)
                     valueColor: net < 0
                         ? const Color(0xFFB71C1C)
                         : const Color(0xFF2E7D32),
@@ -633,7 +616,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                 ),
                 Expanded(
                   child: _StatChip(
-                      label: 'UNPAID BALANCE',
+                      label: loc.tr('unpaid_balance'),
                       value: _fmtAmt(unpaid),
                       valueColor: unpaid > 0
                           ? const Color(0xFFB71C1C)
@@ -660,7 +643,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'No ${widget.isSales ? "sales" : "purchases"} in this period',
+                          widget.isSales
+                              ? loc.tr('no_sales_in_period')
+                              : loc.tr('no_purchases_in_period'),
                           style: const TextStyle(
                               fontSize: 14, color: Color(0xFF9E9E9E)),
                         ),
@@ -702,14 +687,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         : const Icon(Icons.download, size: 18),
                     label: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text('DOWNLOAD',
-                            style: TextStyle(
+                      children: [
+                        Text(loc.tr('download_label'),
+                            style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 13,
                                 letterSpacing: 0.5)),
-                        Text('PDF, EXCEL',
-                            style: TextStyle(fontSize: 10)),
+                        Text(loc.tr('download_sub'),
+                            style: const TextStyle(fontSize: 10)),
                       ],
                     ),
                     style: ElevatedButton.styleFrom(
@@ -737,14 +722,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         : const Icon(Icons.share, size: 18),
                     label: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text('SHARE',
-                            style: TextStyle(
+                      children: [
+                        Text(loc.tr('share_label'),
+                            style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 13,
                                 letterSpacing: 0.5)),
-                        Text('WHATSAPP & OTHERS',
-                            style: TextStyle(fontSize: 10)),
+                        Text(loc.tr('share_sub'),
+                            style: const TextStyle(fontSize: 10)),
                       ],
                     ),
                     style: ElevatedButton.styleFrom(
@@ -871,18 +856,18 @@ class _ReportBillTile extends StatelessWidget {
     }
   }
 
-  String get _typeLabel {
+  String _typeLabel(LocaleProvider loc) {
     switch (bill.billType) {
       case BillType.sale:
-        return 'Sale Bill';
+        return loc.tr('sale_bill');
       case BillType.purchase:
-        return 'Purchase Bill';
+        return loc.tr('purchase_bill');
       case BillType.saleReturn:
-        return 'Sale Return';
+        return loc.tr('sale_return');
       case BillType.purchaseReturn:
-        return 'Purchase Return';
+        return loc.tr('purchase_return');
       default:
-        return 'Bill';
+        return loc.tr('bill_label');
     }
   }
 
@@ -890,6 +875,7 @@ class _ReportBillTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final isPaid = bill.isPaid;
     final isPartial = !isPaid && bill.paidAmount > 0;
     final statusColor = isPaid
@@ -897,8 +883,11 @@ class _ReportBillTile extends StatelessWidget {
         : isPartial
             ? const Color(0xFFF97316)
             : const Color(0xFFB71C1C);
-    final statusLabel =
-        isPaid ? 'Fully Paid' : isPartial ? 'Partial' : 'Unpaid';
+    final statusLabel = isPaid
+        ? loc.tr('fully_paid')
+        : isPartial
+            ? loc.tr('partial')
+            : loc.tr('unpaid');
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -921,7 +910,7 @@ class _ReportBillTile extends StatelessWidget {
                 Text(
                   bill.partyName?.isNotEmpty == true
                       ? bill.partyName!
-                      : _typeLabel,
+                      : _typeLabel(loc),
                   style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,

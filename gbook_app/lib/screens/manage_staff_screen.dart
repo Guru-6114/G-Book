@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
+import '../l10n/app_localizations.dart';
 import 'staff_permissions_screen.dart';
 import 'staff_contact_picker_screen.dart'; // NEW — contacts-synced staff picker
 
@@ -75,6 +76,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     final provider = context.watch<StaffProvider>();
     final staffList = _applyFilter(provider.staff);
     final totalDue =
@@ -84,7 +86,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Text('Manage Staff'),
+        title: Text(loc.get('manage_staff_title')),
       ),
       body: provider.loading
           ? const Center(child: CircularProgressIndicator())
@@ -110,9 +112,9 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Total Due',
+                            Text(loc.get('total_due'),
                                 style:
-                                    TextStyle(fontSize: 13, color: Colors.grey)),
+                                    const TextStyle(fontSize: 13, color: Colors.grey)),
                             const SizedBox(height: 4),
                             Text(
                               AppHelpers.formatCurrency(totalDue),
@@ -122,7 +124,9 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                                   fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 2),
-                            Text('for ${provider.staff.length} staff',
+                            Text(
+                                loc.getParams('for_n_staff',
+                                    {'count': '${provider.staff.length}'}),
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.grey)),
                           ],
@@ -131,7 +135,9 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('Attendance - ${AppHelpers.formatDate(_today)}',
+                          Text(
+                              loc.getParams('attendance_date',
+                                  {'date': AppHelpers.formatDate(_today)}),
                               style: const TextStyle(
                                   fontSize: 12, color: Colors.grey)),
                           const SizedBox(height: 6),
@@ -171,7 +177,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                         child: TextField(
                           controller: _searchCtrl,
                           decoration: InputDecoration(
-                            hintText: 'Search Staff',
+                            hintText: loc.get('search_staff_hint'),
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
                             fillColor: Colors.white,
@@ -189,7 +195,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                       OutlinedButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.filter_list, size: 18),
-                        label: const Text('Filters'),
+                        label: Text(loc.get('filters')),
                       ),
                     ],
                   ),
@@ -202,14 +208,14 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                     child: Row(
                       children: [
                         _FilterChip(
-                          label: 'All',
+                          label: loc.get('filter_all'),
                           selected: _filter == _StaffFilter.all,
                           onTap: () =>
                               setState(() => _filter = _StaffFilter.all),
                         ),
                         const SizedBox(width: 8),
                         _FilterChip(
-                          label: 'Salary & Attendance Added',
+                          label: loc.get('filter_salary_attendance'),
                           selected:
                               _filter == _StaffFilter.salaryAndAttendance,
                           onTap: () => setState(() =>
@@ -217,7 +223,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                         ),
                         const SizedBox(width: 8),
                         _FilterChip(
-                          label: 'Permission Given',
+                          label: loc.get('filter_permission_given'),
                           selected: _filter == _StaffFilter.permissionGiven,
                           onTap: () => setState(
                               () => _filter = _StaffFilter.permissionGiven),
@@ -238,8 +244,8 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
                               const SizedBox(height: 10),
                               Text(
                                 provider.staff.isEmpty
-                                    ? 'No staff added yet'
-                                    : 'No staff match this filter',
+                                    ? loc.get('no_staff_yet')
+                                    : loc.get('no_staff_match_filter'),
                                 style: TextStyle(color: Colors.grey.shade600),
                               ),
                             ],
@@ -259,7 +265,7 @@ class _ManageStaffScreenState extends State<ManageStaffScreen> {
         backgroundColor: const Color(0xFF9C1B45),
         onPressed: _openAddStaffFlow, // FIX: now opens the contact picker
         icon: const Icon(Icons.person_add_outlined),
-        label: const Text('ADD STAFF'),
+        label: Text(loc.get('add_staff')),
       ),
     );
   }
@@ -338,23 +344,24 @@ class _StaffTile extends StatelessWidget {
 
   const _StaffTile({required this.staff, required this.date});
 
-  String _permissionLabel(Staff s) {
-    if (!s.permissionsEnabled) return 'No Permission';
-    if (s.fullPermission) return 'Full Permission';
+  String _permissionLabel(Staff s, AppLocalizations loc) {
+    if (!s.permissionsEnabled) return loc.get('perm_no_permission');
+    if (s.fullPermission) return loc.get('perm_full_permission');
     switch (s.partyPermission) {
       case PartyPermissionLevel.none:
-        return 'No Permission';
+        return loc.get('perm_no_permission');
       case PartyPermissionLevel.viewAndRemind:
-        return 'Party (View)';
+        return loc.get('perm_party_view');
       case PartyPermissionLevel.addAndView:
-        return 'Party (Add & View)';
+        return loc.get('perm_party_add_view');
       case PartyPermissionLevel.fullAccess:
-        return 'Party (Full)';
+        return loc.get('perm_party_full');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     return Consumer<StaffProvider>(
       builder: (context, provider, _) {
         final due = provider.dueFor(staff);
@@ -432,8 +439,8 @@ class _StaffTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('PERMISSIONS',
-                            style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text(loc.get('permissions_label'),
+                            style: const TextStyle(fontSize: 10, color: Colors.grey)),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -443,7 +450,7 @@ class _StaffTile extends StatelessWidget {
                                 AppTheme.primaryColor.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: Text(_permissionLabel(staff),
+                          child: Text(_permissionLabel(staff, loc),
                               style: const TextStyle(fontSize: 11)),
                         ),
                       ],
@@ -452,8 +459,8 @@ class _StaffTile extends StatelessWidget {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text("TODAY'S ATTENDANCE",
-                          style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text(loc.get('todays_attendance'),
+                          style: const TextStyle(fontSize: 10, color: Colors.grey)),
                       const SizedBox(height: 6),
                       _AttendanceDropdown(
                         value: current,
@@ -498,6 +505,7 @@ class _AttendanceDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
@@ -509,7 +517,8 @@ class _AttendanceDropdown extends StatelessWidget {
           value: value,
           isDense: true,
           icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-          hint: const Text('Mark', style: TextStyle(fontSize: 13)),
+          hint: Text(loc.get('mark_attendance_hint'),
+              style: const TextStyle(fontSize: 13)),
           items: AttendanceStatus.values.map((s) {
             return DropdownMenuItem(
               value: s,

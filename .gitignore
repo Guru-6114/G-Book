@@ -41,3 +41,8 @@ gbook_backend/serviceAccountKey.json
 
 # Environment
 venv/
+
+# Backend / Database
+gbook_backend/db.sqlite3
+gbook_backend/__pycache__/
+*.pyc

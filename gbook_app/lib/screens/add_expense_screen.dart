@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../providers/locale_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 
@@ -27,6 +28,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   // Expense items (optional)
   final List<_ExpenseItemRow> _expenseItems = [];
 
+  // Internal keys (English) — used for storage / notes, NOT changed by
+  // localization. Display text is looked up via _categoryDisplay().
   static const List<String> _categories = [
     'Rent',
     'Salaries',
@@ -41,6 +44,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     'Taxes',
     'Other',
   ];
+
+  String _categoryDisplay(String key, LocaleProvider loc) {
+    final tKey =
+        'cat_${key.toLowerCase().replaceAll(' ', '_')}';
+    return loc.tr(tKey);
+  }
 
   @override
   void initState() {
@@ -67,6 +76,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   void _showCategorySheet() {
+    final loc = context.read<LocaleProvider>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -80,10 +90,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         expand: false,
         builder: (_, scrollCtrl) => Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Select Category',
-                  style: TextStyle(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(loc.tr('select_category'),
+                  style: const TextStyle(
                       fontSize: 16, fontWeight: FontWeight.w700)),
             ),
             Expanded(
@@ -93,7 +103,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 separatorBuilder: (_, __) =>
                     const Divider(height: 1, indent: 20),
                 itemBuilder: (_, i) => ListTile(
-                  title: Text(_categories[i],
+                  title: Text(_categoryDisplay(_categories[i], loc),
                       style: const TextStyle(fontSize: 15)),
                   onTap: () {
                     setState(() => _category = _categories[i]);
@@ -123,9 +133,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   }
 
   Future<void> _save() async {
+    final loc = context.read<LocaleProvider>();
     final amount = double.tryParse(_amountCtrl.text.trim());
     if (amount == null || amount <= 0) {
-      AppHelpers.showErrorSnackBar(context, 'Please enter a valid amount');
+      AppHelpers.showErrorSnackBar(
+          context, loc.tr('enter_valid_amount_expense'));
       return;
     }
 
@@ -155,7 +167,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       await billsProvider.addBill(bill);
       if (!mounted) return;
 
-      AppHelpers.showSuccessSnackBar(context, 'Expense saved!');
+      AppHelpers.showSuccessSnackBar(context, loc.tr('expense_saved'));
       Navigator.pop(context, true);
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -164,6 +176,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
@@ -172,9 +185,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Add Expense',
-          style: TextStyle(
+        title: Text(
+          loc.tr('add_expense_title'),
+          style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
         ),
         elevation: 0,
@@ -196,8 +209,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Expense No.',
-                                style: TextStyle(
+                            Text(loc.tr('expense_no'),
+                                style: const TextStyle(
                                     fontSize: 12, color: Color(0xFF9E9E9E))),
                             Row(
                               children: [
@@ -217,8 +230,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text('Date',
-                                style: TextStyle(
+                            Text(loc.tr('date_label'),
+                                style: const TextStyle(
                                     fontSize: 12, color: Color(0xFF9E9E9E))),
                             GestureDetector(
                               onTap: () async {
@@ -278,7 +291,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              _category ?? 'Category',
+                              _category != null
+                                  ? _categoryDisplay(_category!, loc)
+                                  : loc.tr('category_label'),
                               style: TextStyle(
                                 fontSize: 15,
                                 color: _category != null
@@ -307,10 +322,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           const Icon(Icons.inventory_2_outlined,
                               size: 20, color: Color(0xFF757575)),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Add Expense Items (Optional)',
-                              style: TextStyle(
+                              loc.tr('add_expense_items_optional'),
+                              style: const TextStyle(
                                   fontSize: 15, color: Color(0xFF212121)),
                             ),
                           ),
@@ -326,15 +341,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     color: const Color(0xFFFFFDE7),
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.info_outline,
+                        const Icon(Icons.info_outline,
                             size: 16, color: Color(0xFFF9A825)),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Expense items will not affect your inventory items',
-                            style: TextStyle(
+                            loc.tr('expense_items_no_inventory'),
+                            style: const TextStyle(
                                 fontSize: 12, color: Color(0xFF795548)),
                           ),
                         ),
@@ -350,9 +365,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         horizontal: 16, vertical: 16),
                     child: Row(
                       children: [
-                        const Text(
-                          'Expense Amount',
-                          style: TextStyle(
+                        Text(
+                          loc.tr('expense_amount'),
+                          style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF212121)),
@@ -367,7 +382,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
                             decoration: InputDecoration(
-                              hintText: 'Enter Amount',
+                              hintText: loc.tr('enter_amount_hint'),
                               hintStyle: const TextStyle(
                                   color: Color(0xFFBDBDBD), fontSize: 15),
                               filled: true,
@@ -393,8 +408,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Payment Status',
-                            style: TextStyle(
+                        Text(loc.tr('payment_status'),
+                            style: const TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF757575),
                                 fontWeight: FontWeight.w600)),
@@ -427,7 +442,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                               : AppColors.grey,
                                           size: 20),
                                       const SizedBox(height: 4),
-                                      Text('Fully Paid',
+                                      Text(loc.tr('fully_paid'),
                                           style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
@@ -465,7 +480,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                                               : AppColors.grey,
                                           size: 20),
                                       const SizedBox(height: 4),
-                                      Text('Partial / Unpaid',
+                                      Text(loc.tr('partial_unpaid'),
                                           style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
@@ -485,10 +500,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             controller: _paidCtrl,
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
-                            decoration: const InputDecoration(
-                              labelText: 'Amount Paid',
+                            decoration: InputDecoration(
+                              labelText: loc.tr('amount_paid'),
                               prefixIcon:
-                                  Icon(Icons.currency_rupee, size: 18),
+                                  const Icon(Icons.currency_rupee, size: 18),
                             ),
                           ),
                         ],
@@ -504,9 +519,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     child: TextField(
                       controller: _notesCtrl,
                       maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Notes (optional)',
-                        prefixIcon: Icon(Icons.note_outlined, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.tr('description_optional'),
+                        prefixIcon:
+                            const Icon(Icons.note_outlined, size: 18),
                       ),
                     ),
                   ),
@@ -541,9 +557,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : const Text(
-                        'SAVE EXPENSE',
-                        style: TextStyle(
+                    : Text(
+                        loc.tr('save_expense'),
+                        style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1,
@@ -577,6 +593,7 @@ class _ExpenseItemsSheet extends StatefulWidget {
 class _ExpenseItemsSheetState extends State<_ExpenseItemsSheet> {
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     return Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -589,9 +606,9 @@ class _ExpenseItemsSheetState extends State<_ExpenseItemsSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Expense Items',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                Text(loc.tr('expense_items_title'),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
                 IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.pop(context),
@@ -617,11 +634,11 @@ class _ExpenseItemsSheetState extends State<_ExpenseItemsSheet> {
                         Expanded(
                           child: TextField(
                             controller: row.nameCtrl,
-                            decoration: const InputDecoration(
-                              hintText: 'Item name',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              hintText: loc.tr('item_name_hint'),
+                              border: const OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 10),
                             ),
                           ),
@@ -632,11 +649,11 @@ class _ExpenseItemsSheetState extends State<_ExpenseItemsSheet> {
                           child: TextField(
                             controller: row.amountCtrl,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              hintText: 'Amount',
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              hintText: loc.tr('amount_hint'),
+                              border: const OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 10),
                             ),
                           ),
@@ -656,14 +673,14 @@ class _ExpenseItemsSheetState extends State<_ExpenseItemsSheet> {
           ),
           InkWell(
             onTap: () => setState(() => widget.items.add(_ExpenseItemRow())),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
                 children: [
-                  Icon(Icons.add, color: AppTheme.primaryColor, size: 18),
-                  SizedBox(width: 6),
-                  Text('ADD ITEM',
-                      style: TextStyle(
+                  const Icon(Icons.add, color: AppTheme.primaryColor, size: 18),
+                  const SizedBox(width: 6),
+                  Text(loc.tr('add_item'),
+                      style: const TextStyle(
                           color: AppTheme.primaryColor,
                           fontWeight: FontWeight.w700,
                           fontSize: 13)),
@@ -690,8 +707,8 @@ class _ExpenseItemsSheetState extends State<_ExpenseItemsSheet> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('SAVE',
-                    style: TextStyle(
+                child: Text(loc.tr('save'),
+                    style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                         color: Colors.white)),

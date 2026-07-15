@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
+import '../l10n/app_localizations.dart';
 
 class StaffPermissionsScreen extends StatefulWidget {
   final Staff? existing;
@@ -40,12 +41,22 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
 
   bool get _isEditing => widget.existing != null;
 
-  static const List<({PartyPermissionLevel level, String label})>
-      _permissionOptions = [
-    (level: PartyPermissionLevel.viewAndRemind, label: 'View Entries & Send Reminders'),
-    (level: PartyPermissionLevel.addAndView, label: 'Add & View: Entries/Parties'),
-    (level: PartyPermissionLevel.fullAccess, label: 'Add, View, Edit, Delete: Entries/Parties'),
-  ];
+  List<({PartyPermissionLevel level, String label})> _permissionOptions(
+      AppLocalizations loc) =>
+      [
+        (
+          level: PartyPermissionLevel.viewAndRemind,
+          label: loc.get('perm_option_view_remind')
+        ),
+        (
+          level: PartyPermissionLevel.addAndView,
+          label: loc.get('perm_option_add_view')
+        ),
+        (
+          level: PartyPermissionLevel.fullAccess,
+          label: loc.get('perm_option_full')
+        ),
+      ];
 
   @override
   void initState() {
@@ -92,6 +103,7 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
   }
 
   Future<void> _pickPartyPermission() async {
+    final loc = context.l10n;
     final result = await showModalBottomSheet<PartyPermissionLevel>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -115,10 +127,12 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Parties',
-                                style: TextStyle(
+                            Text(loc.get('parties_tile_title'),
+                                style: const TextStyle(
                                     fontWeight: FontWeight.w700, fontSize: 16)),
-                            Text('Select permissions for $_displayName',
+                            Text(
+                                loc.getParams('select_permissions_for',
+                                    {'name': _displayName}),
                                 style: const TextStyle(
                                     fontSize: 12, color: Colors.grey)),
                           ],
@@ -127,7 +141,7 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                     ],
                   ),
                   const Divider(height: 24),
-                  ..._permissionOptions.map((opt) {
+                  ..._permissionOptions(loc).map((opt) {
                     return RadioListTile<PartyPermissionLevel>(
                       value: opt.level,
                       groupValue: selected,
@@ -144,7 +158,7 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () => Navigator.pop(ctx, selected),
-                      child: const Text('GOT IT'),
+                      child: Text(loc.get('got_it_caps')),
                     ),
                   ),
                 ],
@@ -157,28 +171,29 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
     if (result != null) setState(() => _partyPermission = result);
   }
 
-  String get _partyPermissionLabel {
+  String _partyPermissionLabel(AppLocalizations loc) {
     switch (_partyPermission) {
       case PartyPermissionLevel.none:
-        return 'NONE';
+        return loc.get('perm_short_none');
       case PartyPermissionLevel.viewAndRemind:
-        return 'VIEW & REMIND';
+        return loc.get('perm_short_view_remind');
       case PartyPermissionLevel.addAndView:
-        return 'ADD & VIEW';
+        return loc.get('perm_short_add_view');
       case PartyPermissionLevel.fullAccess:
-        return 'FULL ACCESS';
+        return loc.get('perm_short_full');
     }
   }
 
   Future<void> _save() async {
+    final loc = context.l10n;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      AppHelpers.showErrorSnackBar(context, 'Staff name is required');
+      AppHelpers.showErrorSnackBar(context, loc.get('staff_name_required'));
       return;
     }
     final salary = double.tryParse(_salaryCtrl.text.trim()) ?? 0;
     if (_attendanceSalaryEnabled && salary <= 0) {
-      AppHelpers.showErrorSnackBar(context, 'Enter a valid salary amount');
+      AppHelpers.showErrorSnackBar(context, loc.get('enter_valid_salary'));
       return;
     }
 
@@ -205,12 +220,12 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
       if (_isEditing) {
         await provider.updateStaff(staff);
         if (!mounted) return;
-        AppHelpers.showSuccessSnackBar(context, 'Staff details updated');
+        AppHelpers.showSuccessSnackBar(context, loc.get('staff_updated'));
         Navigator.pop(context, true);
       } else {
         await provider.addStaff(staff);
         if (!mounted) return;
-        await _showSuccessDialog(staff);
+        await _showSuccessDialog(staff, loc);
       }
     } catch (e) {
       if (mounted) AppHelpers.showErrorSnackBar(context, e.toString());
@@ -219,7 +234,7 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
     }
   }
 
-  Future<void> _showSuccessDialog(Staff staff) async {
+  Future<void> _showSuccessDialog(Staff staff, AppLocalizations loc) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -232,18 +247,19 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
             children: [
               const Icon(Icons.check_circle, color: Colors.green, size: 44),
               const SizedBox(height: 14),
-              Text('${staff.name} added successfully!',
+              Text(
+                  loc.getParams('staff_added_success', {'name': staff.name}),
                   style:
                       const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
               const SizedBox(height: 8),
               Text(
-                "Now you can manage ${staff.name}'s attendance and salary payments",
+                loc.getParams('staff_added_desc', {'name': staff.name}),
                 style: const TextStyle(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 8),
-              Text('Next steps for ${staff.name}',
+              Text(loc.getParams('next_steps_for', {'name': staff.name}),
                   style: const TextStyle(
                       color: AppTheme.primaryColor,
                       fontWeight: FontWeight.w700,
@@ -251,13 +267,12 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
               const SizedBox(height: 10),
               _NextStepRow(
                 number: '1',
-                text: 'Ask ${staff.name} to install the GBook app & Login',
+                text: loc.getParams('next_step_install', {'name': staff.name}),
               ),
               const SizedBox(height: 8),
               _NextStepRow(
                 number: '2',
-                text:
-                    'They will be able to see your business and take actions as per the given permissions',
+                text: loc.get('next_step_permissions'),
               ),
             ],
           ),
@@ -270,7 +285,7 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                 Navigator.pop(ctx);
                 Navigator.pop(context, true);
               },
-              child: const Text('OKAY'),
+              child: Text(loc.get('okay')),
             ),
           ),
         ],
@@ -280,10 +295,11 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Staff and Permissions'),
+        title: Text(loc.get('staff_permissions_title')),
       ),
       body: ListView(
         children: [
@@ -293,9 +309,9 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
               controller: _nameCtrl,
               textCapitalization: TextCapitalization.words,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Staff Name *',
-                prefixIcon: Icon(Icons.person_outline),
+              decoration: InputDecoration(
+                labelText: loc.get('staff_name_label'),
+                prefixIcon: const Icon(Icons.person_outline),
               ),
             ),
           ),
@@ -304,17 +320,17 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
             child: TextFormField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone Number (optional)',
-                prefixIcon: Icon(Icons.phone_outlined),
+              decoration: InputDecoration(
+                labelText: loc.get('phone_optional_label'),
+                prefixIcon: const Icon(Icons.phone_outlined),
               ),
             ),
           ),
           const SizedBox(height: 8),
           _ToggleSection(
             icon: Icons.badge_outlined,
-            title: 'Attendance & Salary',
-            subtitle: 'Manage attendance & salary',
+            title: loc.get('attendance_salary_title'),
+            subtitle: loc.get('attendance_salary_subtitle'),
             value: _attendanceSalaryEnabled,
             onChanged: (v) => setState(() => _attendanceSalaryEnabled = v),
           ),
@@ -325,8 +341,8 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('SALARY CALCULATION START DATE',
-                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(loc.get('salary_start_date_label'),
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: _pickStartDate,
@@ -352,15 +368,16 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('SALARY TYPE',
-                      style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  Text(loc.get('salary_type_label'),
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
                         child: _SalaryTypeCard(
-                          label: 'Monthly',
-                          subtitle: '$_displayName gets monthly salary',
+                          label: loc.get('salary_monthly'),
+                          subtitle: loc.getParams(
+                              'salary_monthly_subtitle', {'name': _displayName}),
                           selected: _salaryType == SalaryType.monthly,
                           onTap: () =>
                               setState(() => _salaryType = SalaryType.monthly),
@@ -369,8 +386,9 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _SalaryTypeCard(
-                          label: 'Daily',
-                          subtitle: '$_displayName gets daily salary',
+                          label: loc.get('salary_daily'),
+                          subtitle: loc.getParams(
+                              'salary_daily_subtitle', {'name': _displayName}),
                           selected: _salaryType == SalaryType.daily,
                           onTap: () =>
                               setState(() => _salaryType = SalaryType.daily),
@@ -383,11 +401,11 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                     controller: _salaryCtrl,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.currency_rupee, size: 18),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.currency_rupee, size: 18),
                       filled: true,
                       fillColor: Colors.white,
-                      hintText: 'Enter amount',
+                      hintText: loc.get('enter_amount_generic'),
                     ),
                   ),
                 ],
@@ -396,9 +414,9 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
           const SizedBox(height: 8),
           _ToggleSection(
             icon: Icons.description_outlined,
-            title: 'Permissions',
+            title: loc.get('permissions_title'),
             subtitle:
-                'Permissions for $_displayName to manage your business on GBook',
+                loc.getParams('permissions_subtitle', {'name': _displayName}),
             value: _permissionsEnabled,
             onChanged: (v) => setState(() => _permissionsEnabled = v),
           ),
@@ -408,19 +426,19 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
               child: CheckboxListTile(
                 value: _fullPermission,
                 controlAffinity: ListTileControlAffinity.leading,
-                title: Text('Give full permission to $_displayName'),
+                title: Text(
+                    loc.getParams('give_full_permission', {'name': _displayName})),
                 onChanged: (v) => setState(() => _fullPermission = v ?? false),
               ),
             ),
             if (!_fullPermission)
               ListTile(
                 leading: const Icon(Icons.people_alt_outlined),
-                title: const Text('Parties'),
-                subtitle: const Text(
-                    'Allow staff to manage entries and view reports'),
+                title: Text(loc.get('parties_tile_title')),
+                subtitle: Text(loc.get('parties_tile_subtitle')),
                 trailing: OutlinedButton(
                   onPressed: _pickPartyPermission,
-                  child: Text(_partyPermissionLabel),
+                  child: Text(_partyPermissionLabel(loc)),
                 ),
               ),
           ],
@@ -438,8 +456,8 @@ class _StaffPermissionsScreenState extends State<StaffPermissionsScreen> {
                         height: 20,
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
-                    : const Text('SAVE',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    : Text(loc.get('save_caps'),
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ),

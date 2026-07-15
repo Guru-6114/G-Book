@@ -8,6 +8,7 @@ import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import '../widgets/widgets.dart';
+import '../l10n/app_localizations.dart';
 import 'reports_screen.dart';
 
 class ItemsScreen extends StatefulWidget {
@@ -88,6 +89,7 @@ class _ItemsScreenState extends State<ItemsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     // Watching AuthProvider here means that the moment the user switches
     // their active khatabook (e.g. selecting "Electrical" from the book
     // switcher), this build() re-runs, notices the bookId changed, and
@@ -140,8 +142,8 @@ class _ItemsScreenState extends State<ItemsScreen>
                 onPressed: widget.onBackToMore,
               )
             : null,
-        title: const Text('Items',
-            style: TextStyle(
+        title: Text(loc.get('items'),
+            style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
                 fontSize: 17)),
@@ -153,9 +155,9 @@ class _ItemsScreenState extends State<ItemsScreen>
           unselectedLabelColor: Colors.white60,
           labelStyle:
               const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-          tabs: const [
-            Tab(text: 'PRODUCTS'),
-            Tab(text: 'SERVICES'),
+          tabs: [
+            Tab(text: loc.get('items_tab_products')),
+            Tab(text: loc.get('items_tab_services')),
           ],
         ),
       ),
@@ -195,8 +197,8 @@ class _ItemsScreenState extends State<ItemsScreen>
                                 color: Color(0xFF212121)),
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const Text('Total Stock value',
-                              style: TextStyle(
+                          Text(loc.get('total_stock_value'),
+                              style: const TextStyle(
                                   fontSize: 11, color: Color(0xFF757575))),
                         ],
                       ),
@@ -218,8 +220,8 @@ class _ItemsScreenState extends State<ItemsScreen>
                                 fontSize: 15,
                                 color: Color(0xFFD32F2F)),
                           ),
-                          const Text('Low Stock Items',
-                              style: TextStyle(
+                          Text(loc.get('low_stock_items'),
+                              style: const TextStyle(
                                   fontSize: 11, color: Color(0xFF757575))),
                         ],
                       ),
@@ -235,7 +237,7 @@ class _ItemsScreenState extends State<ItemsScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('VIEW\nREPORTS',
+                          Text(loc.get('view_reports_caps'),
                               textAlign: TextAlign.right,
                               style: TextStyle(
                                   color: AppTheme.primaryColor,
@@ -264,8 +266,8 @@ class _ItemsScreenState extends State<ItemsScreen>
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: _tabs.index == 0
-                          ? 'Search Items'
-                          : 'Search services...',
+                          ? loc.get('search_items_hint')
+                          : loc.get('search_services_hint'),
                       hintStyle: const TextStyle(
                           fontSize: 13, color: Color(0xFFBDBDBD)),
                       prefixIcon: const Icon(Icons.search,
@@ -296,7 +298,8 @@ class _ItemsScreenState extends State<ItemsScreen>
                   TextButton.icon(
                     onPressed: () {},
                     icon: const Icon(Icons.sort, size: 16),
-                    label: const Text('Sort', style: TextStyle(fontSize: 13)),
+                    label: Text(loc.get('sort_label'),
+                        style: const TextStyle(fontSize: 13)),
                   ),
                 ],
               ],
@@ -316,16 +319,20 @@ class _ItemsScreenState extends State<ItemsScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${lowStockProducts.length} item${lowStockProducts.length > 1 ? 's' : ''} '
-                      'running low on stock. Reorder soon!',
+                      loc.getParams('low_stock_banner', {
+                        'count': '${lowStockProducts.length}',
+                        'itemWord': lowStockProducts.length > 1
+                            ? loc.get('item_plural')
+                            : loc.get('item_singular'),
+                      }),
                       style: const TextStyle(
                           fontSize: 13, color: Color(0xFFE65100)),
                     ),
                   ),
                   TextButton(
                     onPressed: () => _showLowStockItems(lowStockProducts),
-                    child: const Text('View',
-                        style: TextStyle(color: Color(0xFFE65100))),
+                    child: Text(loc.get('view_label'),
+                        style: const TextStyle(color: Color(0xFFE65100))),
                   ),
                 ],
               ),
@@ -369,12 +376,15 @@ class _ItemsScreenState extends State<ItemsScreen>
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openAddItem(isService: _tabs.index == 1),
         icon: const Icon(Icons.add),
-        label: Text(_tabs.index == 0 ? 'Add Product' : 'Add Service'),
+        label: Text(_tabs.index == 0
+            ? loc.get('add_product_label')
+            : loc.get('add_service_label')),
       ),
     );
   }
 
   void _showLowStockItems(List<Item> items) {
+    final loc = context.l10n;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -389,9 +399,9 @@ class _ItemsScreenState extends State<ItemsScreen>
                 const Icon(Icons.warning_amber_outlined,
                     color: Color(0xFFE65100)),
                 const SizedBox(width: 8),
-                const Text('Low Stock Items',
+                Text(loc.get('low_stock_items'),
                     style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                 const Spacer(),
                 IconButton(
                     icon: const Icon(Icons.close),
@@ -407,14 +417,16 @@ class _ItemsScreenState extends State<ItemsScreen>
                 ),
                 title: Text(item.name,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(
-                    'Stock: ${item.stock?.toStringAsFixed(0) ?? 0}  •  Alert below ${item.lowStockThreshold.toStringAsFixed(0)}'),
+                subtitle: Text(loc.getParams('stock_alert_below', {
+                  'stock': item.stock?.toStringAsFixed(0) ?? '0',
+                  'threshold': item.lowStockThreshold.toStringAsFixed(0),
+                })),
                 trailing: TextButton(
                   onPressed: () {
                     Navigator.pop(context);
                     _openAddItem(existing: item);
                   },
-                  child: const Text('Update'),
+                  child: Text(loc.get('update_label')),
                 ),
               )),
           const SizedBox(height: 12),
@@ -441,6 +453,7 @@ class _ItemList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     if (items.isEmpty) {
       // Scroll-safe empty state (fixes "BOTTOM OVERFLOWED" error that
       // happened when the keyboard was open while typing in the search
@@ -478,7 +491,9 @@ class _ItemList extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        isService ? 'No services yet' : 'No products yet',
+                        isService
+                            ? loc.get('no_services_yet')
+                            : loc.get('no_products_yet'),
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
@@ -486,8 +501,8 @@ class _ItemList extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         isService
-                            ? 'Add your services to include in bills'
-                            : 'Add your products to manage stock & billing',
+                            ? loc.get('add_services_hint_desc')
+                            : loc.get('add_products_hint_desc'),
                         style: const TextStyle(
                             fontSize: 13, color: Colors.grey),
                         textAlign: TextAlign.center,
@@ -534,8 +549,17 @@ class _ItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     final isLowStock = item.isLowStock;
     final hasImage = item.imagePath != null && item.imagePath!.isNotEmpty;
+
+    final subtitleParts = <String>[
+      '${loc.get('label_sale')}: ${AppHelpers.formatCurrency(item.salePrice)}',
+      if (item.purchasePrice != null)
+        '${loc.get('label_purchase')}: ${AppHelpers.formatCurrency(item.purchasePrice!)}',
+      if (item.gstRate > 0)
+        '${loc.get('label_gst')}: ${item.gstRate.toStringAsFixed(0)}%',
+    ];
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -565,8 +589,8 @@ class _ItemTile extends StatelessWidget {
                 color: const Color(0xFFFFF3E0),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text('Low Stock',
-                  style: TextStyle(fontSize: 10, color: Color(0xFFE65100))),
+              child: Text(loc.get('low_stock_badge'),
+                  style: const TextStyle(fontSize: 10, color: Color(0xFFE65100))),
             ),
         ],
       ),
@@ -574,9 +598,7 @@ class _ItemTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Sale: ${AppHelpers.formatCurrency(item.salePrice)}'
-            '${item.purchasePrice != null ? '  |  Purchase: ${AppHelpers.formatCurrency(item.purchasePrice!)}' : ''}'
-            '${item.gstRate > 0 ? '  |  GST: ${item.gstRate.toStringAsFixed(0)}%' : ''}',
+            subtitleParts.join('  |  '),
             style: const TextStyle(fontSize: 12),
           ),
           if (!isService && item.stock != null)
@@ -613,16 +635,17 @@ class _ItemTile extends StatelessWidget {
               final ok = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Delete Item'),
-                  content: Text('Delete "${item.name}"?'),
+                  title: Text(loc.get('delete_item_title')),
+                  content: Text(
+                      loc.getParams('delete_item_confirm', {'name': item.name})),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Cancel')),
+                        child: Text(loc.get('cancel'))),
                     TextButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Delete',
-                            style: TextStyle(color: Colors.red))),
+                        child: Text(loc.get('delete'),
+                            style: const TextStyle(color: Colors.red))),
                   ],
                 ),
               );
@@ -699,6 +722,15 @@ class _AddItemScreenState extends State<AddItemScreen> {
     'Stationery', 'Agriculture', 'Other',
   ];
   String _category = 'Other';
+
+  // Maps the internal (English, stored-in-DB) category value to its
+  // localized display label — same pattern used for expense categories,
+  // so switching language never changes what's actually saved.
+  String _categoryDisplay(String key, AppLocalizations loc) {
+    if (key == 'Other') return loc.get('cat_other');
+    final tKey = 'itemcat_${key.toLowerCase()}';
+    return loc.get(tKey);
+  }
 
   @override
   void initState() {
@@ -841,8 +873,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
         ));
       }
       if (mounted) {
+        final loc = context.l10n;
         AppHelpers.showSuccessSnackBar(
-            context, widget.existing != null ? 'Item updated!' : 'Item added!');
+            context, widget.existing != null ? loc.get('staff_updated_item_placeholder') : 'Item added!');
         Navigator.pop(context);
       }
     } catch (e) {
@@ -866,6 +899,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   // ── SERVICE layout (matches Khatabook "Add Services" screenshot) ─────────
   Widget _buildServiceLayout(BuildContext context) {
+    final loc = context.l10n;
     final hasGstDetails = _hsnCtrl.text.trim().isNotEmpty || _gstRate != '0';
     return Scaffold(
       appBar: AppBar(
@@ -873,7 +907,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(widget.existing != null ? 'Edit Service' : 'Add Service'),
+        title: Text(widget.existing != null
+            ? loc.get('edit_service_title')
+            : loc.get('add_service_title')),
       ),
       body: Form(
         key: _formKey,
@@ -883,7 +919,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
             // Type toggle (kept so users can switch between product/service
             // while creating a new item — hidden for edits to avoid
             // accidentally changing the type of an existing record).
-            if (widget.existing == null) _buildTypeToggle(),
+            if (widget.existing == null) _buildTypeToggle(loc),
 
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -894,12 +930,12 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     child: TextFormField(
                       controller: _nameCtrl,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        hintText: 'Enter Service name here* (Eg ...)',
+                      decoration: InputDecoration(
+                        hintText: loc.get('service_name_hint'),
                         isDense: true,
                       ),
                       validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Name is required'
+                          ? loc.get('name_required')
                           : null,
                     ),
                   ),
@@ -916,8 +952,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Service price',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF424242))),
+                  Text(loc.get('service_price_label'),
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF424242))),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -932,10 +968,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           ),
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) {
-                              return 'Price is required';
+                              return loc.get('price_required');
                             }
                             if (double.tryParse(v) == null) {
-                              return 'Enter valid price';
+                              return loc.get('enter_valid_price');
                             }
                             return null;
                           },
@@ -979,9 +1015,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  const Expanded(
-                    child: Text('Tax included in price',
-                        style: TextStyle(fontSize: 14)),
+                  Expanded(
+                    child: Text(loc.get('tax_included_in_price'),
+                        style: const TextStyle(fontSize: 14)),
                   ),
                   Switch(
                     value: true,
@@ -1000,8 +1036,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 child: Center(
                   child: Text(
                     hasGstDetails
-                        ? 'SAC CODE & GST % ADDED'
-                        : '+ ADD SAC CODE & GST %',
+                        ? loc.get('sac_gst_added')
+                        : loc.get('add_sac_gst'),
                     style: TextStyle(
                       color: AppTheme.primaryColor,
                       fontWeight: FontWeight.w700,
@@ -1025,18 +1061,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   TextFormField(
                     controller: _hsnCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'SAC Code (optional)',
-                      prefixIcon: Icon(Icons.tag_outlined, size: 18),
+                    decoration: InputDecoration(
+                      labelText: loc.get('sac_code_optional'),
+                      prefixIcon: const Icon(Icons.tag_outlined, size: 18),
                       isDense: true,
                     ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: _gstRate,
-                    decoration: const InputDecoration(
-                      labelText: 'GST Rate (%)',
-                      prefixIcon: Icon(Icons.percent, size: 18),
+                    decoration: InputDecoration(
+                      labelText: loc.get('gst_rate_label'),
+                      prefixIcon: const Icon(Icons.percent, size: 18),
                       isDense: true,
                     ),
                     items: _gstRates
@@ -1053,9 +1089,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   TextFormField(
                     controller: _descCtrl,
                     maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Service Description (optional)',
-                      prefixIcon: Icon(Icons.description_outlined, size: 18),
+                    decoration: InputDecoration(
+                      labelText: loc.get('service_description_optional'),
+                      prefixIcon: const Icon(Icons.description_outlined, size: 18),
                       isDense: true,
                     ),
                   ),
@@ -1088,8 +1124,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           color: Colors.white, strokeWidth: 2))
                   : Text(
                       widget.existing != null
-                          ? 'UPDATE SERVICE'
-                          : 'ADD SERVICE',
+                          ? loc.get('update_service_caps')
+                          : loc.get('add_service_caps'),
                       style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
@@ -1177,7 +1213,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     );
   }
 
-  Widget _buildTypeToggle() {
+  Widget _buildTypeToggle(AppLocalizations loc) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -1202,7 +1238,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         color: !_isService ? Colors.white : Colors.grey,
                         size: 20),
                     const SizedBox(height: 4),
-                    Text('Product',
+                    Text(loc.get('type_product'),
                         style: TextStyle(
                             color: !_isService ? Colors.white : Colors.grey,
                             fontWeight: FontWeight.w600,
@@ -1232,7 +1268,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         color: _isService ? Colors.white : Colors.grey,
                         size: 20),
                     const SizedBox(height: 4),
-                    Text('Service',
+                    Text(loc.get('type_service'),
                         style: TextStyle(
                             color: _isService ? Colors.white : Colors.grey,
                             fontWeight: FontWeight.w600,
@@ -1249,16 +1285,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   // ── PRODUCT layout (kept close to original; unchanged feature set) ───────
   Widget _buildProductLayout(BuildContext context) {
+    final loc = context.l10n;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existing != null ? 'Edit Product' : 'Add Product'),
+        title: Text(widget.existing != null
+            ? loc.get('edit_product_title')
+            : loc.get('add_product_title')),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (widget.existing == null) _buildTypeToggle(),
+            if (widget.existing == null) _buildTypeToggle(loc),
             const SizedBox(height: 16),
 
             // ── Item Image picker ──────────────────────────────────────────
@@ -1320,7 +1359,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  _imagePath != null ? 'Tap to change photo' : 'Add a photo',
+                  _imagePath != null
+                      ? loc.get('tap_change_photo')
+                      : loc.get('add_a_photo'),
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
               ),
@@ -1333,34 +1374,34 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Item Details',
-                      style: TextStyle(
+                    Text(
+                      loc.get('item_details_title'),
+                      style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _nameCtrl,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Item Name *',
-                        prefixIcon: Icon(Icons.inventory_2_outlined, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.get('item_name_label'),
+                        prefixIcon: const Icon(Icons.inventory_2_outlined, size: 18),
                       ),
                       validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Name is required'
+                          ? loc.get('name_required')
                           : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _salePriceCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Sale Price (₹) *',
-                        prefixIcon: Icon(Icons.currency_rupee, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.get('sale_price_label'),
+                        prefixIcon: const Icon(Icons.currency_rupee, size: 18),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Price is required';
-                        if (double.tryParse(v) == null) return 'Enter valid price';
+                        if (v == null || v.trim().isEmpty) return loc.get('price_required');
+                        if (double.tryParse(v) == null) return loc.get('enter_valid_price');
                         return null;
                       },
                       onChanged: (_) => setState(() {}),
@@ -1369,9 +1410,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     TextFormField(
                       controller: _purchasePriceCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Purchase Price (₹)',
-                        prefixIcon: Icon(Icons.shopping_cart_outlined, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.get('purchase_price_label'),
+                        prefixIcon: const Icon(Icons.shopping_cart_outlined, size: 18),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1381,9 +1422,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           child: TextFormField(
                             controller: _stockCtrl,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(
-                              labelText: 'Current Stock',
-                              prefixIcon: Icon(Icons.warehouse_outlined, size: 18),
+                            decoration: InputDecoration(
+                              labelText: loc.get('current_stock_label'),
+                              prefixIcon: const Icon(Icons.warehouse_outlined, size: 18),
                             ),
                           ),
                         ),
@@ -1391,8 +1432,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         Expanded(
                           child: DropdownButtonFormField<ItemUnit>(
                             initialValue: _unit,
-                            decoration: const InputDecoration(
-                              labelText: 'Unit',
+                            decoration: InputDecoration(
+                              labelText: loc.get('unit_label'),
                             ),
                             items: ItemUnit.values.map((u) => DropdownMenuItem(
                                   value: u,
@@ -1409,22 +1450,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     TextFormField(
                       controller: _lowStockCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Low Stock Alert (qty)',
-                        prefixIcon: Icon(Icons.warning_amber_outlined, size: 18),
-                        helperText: 'Alert when stock falls below this quantity',
+                      decoration: InputDecoration(
+                        labelText: loc.get('low_stock_alert_label'),
+                        prefixIcon: const Icon(Icons.warning_amber_outlined, size: 18),
+                        helperText: loc.get('low_stock_alert_helper'),
                       ),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: _category,
-                      decoration: const InputDecoration(
-                        labelText: 'Category',
-                        prefixIcon: Icon(Icons.category_outlined, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.get('category_label'),
+                        prefixIcon: const Icon(Icons.category_outlined, size: 18),
                       ),
                       items: _categories.map((c) => DropdownMenuItem(
                             value: c,
-                            child: Text(c),
+                            child: Text(_categoryDisplay(c, loc)),
                           )).toList(),
                       onChanged: (v) {
                         if (v != null) setState(() => _category = v);
@@ -1434,9 +1475,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                     TextFormField(
                       controller: _descCtrl,
                       maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'Item Description',
-                        prefixIcon: Icon(Icons.description_outlined, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.get('item_description_label'),
+                        prefixIcon: const Icon(Icons.description_outlined, size: 18),
                       ),
                     ),
                   ],
@@ -1452,25 +1493,25 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tax Details (GST)',
-                        style: TextStyle(
+                    Text(loc.get('tax_details_gst_title'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w600, fontSize: 14)),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _hsnCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'HSN Code (optional)',
-                        prefixIcon: Icon(Icons.tag_outlined, size: 18),
-                        helperText: 'Harmonized System of Nomenclature code',
+                      decoration: InputDecoration(
+                        labelText: loc.get('hsn_code_optional'),
+                        prefixIcon: const Icon(Icons.tag_outlined, size: 18),
+                        helperText: loc.get('hsn_helper'),
                       ),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: _gstRate,
-                      decoration: const InputDecoration(
-                        labelText: 'GST Rate (%)',
-                        prefixIcon: Icon(Icons.percent, size: 18),
+                      decoration: InputDecoration(
+                        labelText: loc.get('gst_rate_label'),
+                        prefixIcon: const Icon(Icons.percent, size: 18),
                       ),
                       items: _gstRates.map((r) => DropdownMenuItem(
                             value: r,
@@ -1498,7 +1539,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Base Price:', style: TextStyle(fontSize: 12)),
+                                  Text(loc.get('base_price_label'),
+                                      style: const TextStyle(fontSize: 12)),
                                   Text(AppHelpers.formatCurrency(price),
                                       style: const TextStyle(fontSize: 12)),
                                 ],
@@ -1506,7 +1548,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('GST ($_gstRate%):', style: const TextStyle(fontSize: 12)),
+                                  Text(
+                                      loc.getParams(
+                                          'gst_percent_label', {'rate': '$gst'}),
+                                      style: const TextStyle(fontSize: 12)),
                                   Text(AppHelpers.formatCurrency(taxAmt),
                                       style: const TextStyle(fontSize: 12)),
                                 ],
@@ -1515,8 +1560,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Price with GST:',
-                                      style: TextStyle(
+                                  Text(loc.get('price_with_gst_label'),
+                                      style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700)),
                                   Text(AppHelpers.formatCurrency(priceWithTax),
@@ -1549,7 +1594,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2))
                     : Text(
-                        widget.existing != null ? 'Update' : 'Save',
+                        widget.existing != null
+                            ? loc.get('update_label')
+                            : loc.get('save'),
                         style: const TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 15)),
               ),
