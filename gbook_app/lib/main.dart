@@ -14,7 +14,48 @@ import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const GBookApp());
+  // NEW: wrap the whole app in RestartWidget so that a language change can
+  // force a genuine full-app rebuild (all providers recreated, navigation
+  // stack cleared, splash → home flow re-run) — matching how Khatabook
+  // "restarts" back to the Parties page when you change language.
+  runApp(const RestartWidget(child: GBookApp()));
+}
+
+// ── RestartWidget (NEW) ────────────────────────────────────────────────────
+// Standard Flutter pattern for faking a full app restart without killing the
+// process: giving the subtree a brand-new Key forces Flutter to throw away
+// every element/state below it (including all providers in MultiProvider,
+// since their `create` callbacks run again) and build a fresh tree.
+class RestartWidget extends StatefulWidget {
+  final Widget child;
+  const RestartWidget({super.key, required this.child});
+
+  /// Call this from anywhere below RestartWidget (e.g. after changing the
+  /// language) to fully restart the app.
+  static void restartApp(BuildContext context) {
+    context.findAncestorStateOfType<_RestartWidgetState>()?.restartApp();
+  }
+
+  @override
+  State<RestartWidget> createState() => _RestartWidgetState();
+}
+
+class _RestartWidgetState extends State<RestartWidget> {
+  Key _key = UniqueKey();
+
+  void restartApp() {
+    setState(() {
+      _key = UniqueKey();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyedSubtree(
+      key: _key,
+      child: widget.child,
+    );
+  }
 }
 
 class GBookApp extends StatelessWidget {

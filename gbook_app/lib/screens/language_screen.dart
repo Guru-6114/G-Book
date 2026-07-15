@@ -1,14 +1,25 @@
 // lib/screens/language_screen.dart
 //
-// FIX: The previous version only updated a local `_selected` String inside
-// this screen's own State — it never told the rest of the app anything
-// changed, so the whole "tap a language → app changes" flow was broken by
-// design even before you got to SharedPreferences. This version writes
-// through LocaleProvider, which is registered above MaterialApp in
-// main.dart — so every screen that reads context.l10n / AppLocalizations
-// rebuilds immediately app-wide, with no restart needed.
+// FIX: Previously, picking a language in the Settings flow just called
+// LocaleProvider.setLanguage() then Navigator.pop() — that only updated the
+// few screens that actually read LocaleProvider (SMS Settings, Payment
+// Settings, this screen). Every other screen has hardcoded strings and
+// never listens to LocaleProvider at all, so nothing else visibly changed.
+//
+// To match Khatabook's behavior (pick a language → app restarts → you land
+// back on the Parties/home page with the change applied), we now save the
+// language and then call RestartWidget.restartApp(context), which tears
+// down and rebuilds the ENTIRE widget tree (all providers reinitialize,
+// navigation stack is cleared, Splash → Home flow runs again).
+//
+// NOTE: this fixes the "restart the whole app" mechanic. It does NOT by
+// itself translate screens that don't yet call LocaleProvider — those
+// screens need their hardcoded Text(...) strings converted to use
+// LocaleProvider's t.get('key') the same way this screen and
+// sms_settings_screen/payment_settings_screen already do.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../main.dart';
 import '../providers/locale_provider.dart';
 import '../theme/app_theme.dart';
 
@@ -17,7 +28,7 @@ class LanguageScreen extends StatefulWidget {
   /// SplashScreen flow) and "Start Using GBook" continues to permissions.
   /// When false (the normal case — opened from Settings > Language), it
   /// behaves as a simple picker: tap a language, it applies instantly, and
-  /// you can just go back.
+  /// the whole app restarts back to the home screen.
   final bool isOnboarding;
   final VoidCallback? onComplete;
 
@@ -42,15 +53,16 @@ class _LanguageScreenState extends State<LanguageScreen> {
 
   Future<void> _selectLanguage(String code) async {
     setState(() => _selected = code);
-    // FIX: This is the line that actually makes the whole app switch
-    // language. LocaleProvider persists it to SharedPreferences AND calls
-    // notifyListeners(), which the Consumer<LocaleProvider> wrapping
-    // MaterialApp in main.dart picks up instantly.
+    // Persists to SharedPreferences AND calls notifyListeners().
     await context.read<LocaleProvider>().setLanguage(code);
 
     if (!widget.isOnboarding) {
-      // Settings flow: apply and pop straight back — like Khatabook does.
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      // FIX: full app restart instead of a plain Navigator.pop(). This
+      // clears the entire navigation stack (More screen, this screen, etc.)
+      // and rebuilds the app from scratch, landing back on the home /
+      // Parties page — exactly like Khatabook does when you change language.
+      RestartWidget.restartApp(context);
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
+import '../l10n/app_localizations.dart';
 import 'profile_screen.dart';
 import 'app_lock_screen.dart';
 import '../services/app_lock_service.dart';
@@ -15,6 +16,10 @@ import '../services/app_lock_service.dart';
 /// via `import 'settings_screen.dart'` + `const SettingsScreen()`, but the file
 /// did not exist and the in-file placeholder was not a Widget — that was the
 /// hard compile error breaking the build).
+///
+/// FIX: every visible label on this screen now reads from
+/// context.l10n.get('key') instead of being hardcoded English, so it
+/// actually re-renders in the selected language after a language change.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -64,25 +69,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final t = context.l10n;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: AppTheme.primaryColor,
         foregroundColor: Colors.white,
-        title: const Text('Settings',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+        title: Text(t.get('settings'),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          _SectionHeader('Business'),
+          _SectionHeader(t.get('business')),
           _SettingsCard(children: [
             _SettingsTile(
               icon: Icons.store_outlined,
               iconColor: const Color(0xFF1565C0),
-              title: 'Business Profile',
-              subtitle: auth.profile?.businessName ?? 'Edit business details',
+              title: t.get('business_profile'),
+              subtitle: auth.profile?.businessName ?? t.get('edit_business'),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ProfileScreen()),
@@ -90,13 +96,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ]),
 
-          _SectionHeader('Communication'),
+          _SectionHeader(t.get('communication')),
           _SettingsCard(children: [
             _SettingsSwitchTile(
               icon: Icons.sms_outlined,
               iconColor: const Color(0xFF2E7D32),
-              title: 'SMS Alerts',
-              subtitle: 'Auto-send SMS on transactions & reminders',
+              title: t.get('sms_alerts'),
+              subtitle: t.get('auto_send_sms'),
               value: _smsAlertsEnabled,
               onChanged: (v) => setState(() => _smsAlertsEnabled = v),
             ),
@@ -104,18 +110,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsTile(
               icon: Icons.payments_outlined,
               iconColor: const Color(0xFFE65100),
-              title: 'Payment Settings',
+              title: t.get('payment_settings'),
               subtitle: 'UPI ID, QR code & default payment mode',
               onTap: () => _showPaymentSettings(context),
             ),
           ]),
 
-          _SectionHeader('Preferences'),
+          _SectionHeader(t.get('preferences')),
           _SettingsCard(children: [
             _SettingsTile(
               icon: Icons.language_outlined,
               iconColor: const Color(0xFF7B1FA2),
-              title: 'Language',
+              title: t.get('language'),
               subtitle: _language,
               onTap: () => _showLanguagePicker(context),
             ),
@@ -123,7 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsTile(
               icon: Icons.currency_exchange_outlined,
               iconColor: const Color(0xFF00695C),
-              title: 'Currency',
+              title: t.get('currency'),
               subtitle: _currency,
               onTap: () => _showCurrencyPicker(context),
             ),
@@ -133,23 +139,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsTile(
               icon: Icons.fingerprint_outlined,
               iconColor: const Color(0xFFB71C1C),
-              title: 'App Lock',
+              title: t.get('app_lock'),
               subtitle: _appLockLoading
                   ? 'Loading...'
                   : (_appLockEnabled
                       ? 'Enabled — 4-digit PIN required to open GBook'
-                      : 'Require a 4-digit PIN to open GBook'),
+                      : t.get('require_biometric')),
               onTap: _openAppLock,
             ),
           ]),
 
-          _SectionHeader('Data'),
+          _SectionHeader(t.get('data')),
           _SettingsCard(children: [
             _SettingsSwitchTile(
               icon: Icons.cloud_sync_outlined,
               iconColor: const Color(0xFF1565C0),
-              title: 'Auto Backup',
-              subtitle: 'Automatically back up your data daily',
+              title: t.get('auto_backup'),
+              subtitle: t.get('auto_backup_desc'),
               value: _autoBackupEnabled,
               onChanged: (v) => setState(() => _autoBackupEnabled = v),
             ),
@@ -157,37 +163,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _SettingsTile(
               icon: Icons.backup_outlined,
               iconColor: const Color(0xFF2E7D32),
-              title: 'Backup Now',
-              subtitle: 'Manually back up data to cloud',
+              title: t.get('backup_now'),
+              subtitle: t.get('backup_now_desc'),
               onTap: () => _runBackup(context),
             ),
             const Divider(height: 1, indent: 56),
             _SettingsTile(
               icon: Icons.restore_outlined,
               iconColor: const Color(0xFF424242),
-              title: 'Restore Data',
-              subtitle: 'Restore from a previous backup',
+              title: t.get('restore_data'),
+              subtitle: t.get('restore_desc'),
               onTap: () => _showRestoreDialog(context),
             ),
             const Divider(height: 1, indent: 56),
             _SettingsTile(
               icon: Icons.file_download_outlined,
               iconColor: const Color(0xFF6A1B9A),
-              title: 'Export Data',
-              subtitle: 'Export all records as CSV / Excel',
+              title: t.get('export_data'),
+              subtitle: t.get('export_desc'),
               onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Preparing export...')),
               ),
             ),
           ]),
 
-          _SectionHeader('Account'),
+          _SectionHeader(t.get('account')),
           _SettingsCard(children: [
             _SettingsTile(
               icon: Icons.logout,
               iconColor: const Color(0xFFB71C1C),
-              title: 'Logout',
-              subtitle: 'Sign out of your GBook account',
+              title: t.get('logout'),
+              subtitle: t.get('logout_desc'),
               onTap: () => _confirmLogout(context),
             ),
           ]),
@@ -212,10 +218,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Text('Select Language',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Text(context.l10n.get('select_language'),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 16)),
             ),
             ..._languages.map((lang) => RadioListTile<String>(
                   value: lang,
@@ -243,10 +250,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Text('Select Currency',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Text(context.l10n.get('currency'),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 16)),
             ),
             ..._currencies.map((c) => RadioListTile<String>(
                   value: c,
@@ -267,6 +275,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showPaymentSettings(BuildContext context) {
     final upiCtrl = TextEditingController();
+    final t = context.l10n;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -283,15 +292,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Payment Settings',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            Text(t.get('payment_settings'),
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
             const SizedBox(height: 16),
             TextField(
               controller: upiCtrl,
-              decoration: const InputDecoration(
-                labelText: 'UPI ID',
-                hintText: 'yourname@upi',
-                prefixIcon: Icon(Icons.qr_code, size: 18),
+              decoration: InputDecoration(
+                labelText: t.get('upi_id'),
+                hintText: t.get('upi_hint'),
+                prefixIcon: const Icon(Icons.qr_code, size: 18),
               ),
             ),
             const SizedBox(height: 16),
@@ -310,8 +319,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text('SAVE',
-                    style: TextStyle(
+                child: Text(t.get('save').toUpperCase(),
+                    style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.w700)),
               ),
             ),
@@ -343,31 +352,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup completed successfully')),
+          SnackBar(content: Text(context.l10n.get('backup_completed'))),
         );
       }
     });
   }
 
   void _showRestoreDialog(BuildContext context) {
+    final t = context.l10n;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Restore Data'),
+        title: Text(t.get('restore_data')),
         content: const Text(
             'This will replace current data with your last backup. Continue?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+              child: Text(t.get('cancel'))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Data restored successfully')),
+                SnackBar(content: Text(t.get('data_restored'))),
               );
             },
-            child: const Text('Restore'),
+            child: Text(t.get('restore_data')),
           ),
         ],
       ),
@@ -375,22 +385,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _confirmLogout(BuildContext context) {
+    final t = context.l10n;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Logout'),
+        title: Text(t.get('logout')),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+              child: Text(t.get('cancel'))),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               context.read<AuthProvider>().logout();
               Navigator.of(context).popUntil((r) => r.isFirst);
             },
-            child: const Text('Logout', style: TextStyle(color: Colors.red)),
+            child: Text(t.get('logout'), style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),

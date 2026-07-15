@@ -7,6 +7,12 @@ import '../models/models.dart';
 import '../services/local_database.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
+// LocaleProvider exposes tr(key) as an instance method (not a BuildContext
+// extension), so every call site below goes through
+// context.watch<LocaleProvider>().tr('key') (in build methods, so the UI
+// updates live on language change) or context.read<LocaleProvider>().tr('key')
+// (in one-off dialog/callback code that doesn't need to rebuild).
+import '../providers/locale_provider.dart';
 import 'collection_screen.dart';
 import 'reports_screen.dart';
 import 'profile_screen.dart';
@@ -34,6 +40,7 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final profile = auth.profile;
+    final loc = context.watch<LocaleProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -69,7 +76,7 @@ class MoreScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          profile?.businessName ?? 'My Business',
+                          profile?.businessName ?? loc.tr('my_business'),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -99,14 +106,14 @@ class MoreScreen extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.person_outline,
+                          const Icon(Icons.person_outline,
                               color: Colors.white, size: 15),
-                          SizedBox(width: 4),
-                          Text('Profile',
-                              style: TextStyle(
+                          const SizedBox(width: 4),
+                          Text(loc.tr('profile'),
+                              style: const TextStyle(
                                   color: Colors.white, fontSize: 12)),
                         ],
                       ),
@@ -143,14 +150,14 @@ class MoreScreen extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              const Text('Profile strength : ',
-                                  style: TextStyle(
+                              Text('${loc.tr('profile_strength')} : ',
+                                  style: const TextStyle(
                                       color: Colors.white70, fontSize: 13)),
                               Text(
                                 profile?.email != null &&
                                         profile?.address != null
-                                    ? 'Strong'
-                                    : 'Medium',
+                                    ? loc.tr('strong')
+                                    : loc.tr('medium'),
                                 style: const TextStyle(
                                     color: Colors.greenAccent,
                                     fontWeight: FontWeight.w700,
@@ -175,9 +182,9 @@ class MoreScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Fill missing details for a FREE Business Card',
-                            style: TextStyle(
+                          Text(
+                            loc.tr('fill_missing_details_business_card'),
+                            style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13),
@@ -193,9 +200,9 @@ class MoreScreen extends StatelessWidget {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text(
-                        'PROCEED',
-                        style: TextStyle(
+                      child: Text(
+                        loc.tr('proceed').toUpperCase(),
+                        style: const TextStyle(
                           color: Color(0xFF1565C0),
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
@@ -225,7 +232,7 @@ class MoreScreen extends StatelessWidget {
                   icon: Icons.book_outlined,
                   iconColor: const Color(0xFF1565C0),
                   iconBg: const Color(0xFFE3F2FD),
-                  label: 'Cashbook',
+                  label: loc.tr('cashbook'),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -236,7 +243,7 @@ class MoreScreen extends StatelessWidget {
                   icon: Icons.receipt_long_outlined,
                   iconColor: const Color(0xFFB71C1C),
                   iconBg: const Color(0xFFFFEBEE),
-                  label: 'Bills',
+                  label: loc.tr('bills'),
                   onTap: () {
                     if (onNavigateToTab != null) onNavigateToTab!(1);
                   },
@@ -245,25 +252,16 @@ class MoreScreen extends StatelessWidget {
                   icon: Icons.inventory_2_outlined,
                   iconColor: const Color(0xFF7B1FA2),
                   iconBg: const Color(0xFFF3E5F5),
-                  label: 'Items',
+                  label: loc.tr('items'),
                   onTap: () {
                     if (onNavigateToTab != null) onNavigateToTab!(2);
                   },
                 ),
-                // FIX: this used to be a stray method declaration
-                // (`_void _showStaffScreen(...) { ... },`) sitting inside
-                // the widget list, which is invalid Dart syntax. It is now
-                // a proper _FeatureCard that calls the existing
-                // _showStaffScreen(context) method defined below.
                 _FeatureCard(
                   icon: Icons.people_alt_outlined,
                   iconColor: const Color(0xFF2E7D32),
                   iconBg: const Color(0xFFE8F5E9),
-                  label: 'Staff',
-                  // FIX: was calling the old placeholder _showStaffScreen()
-                  // bottom sheet ("Add Staff from Contacts" -> fake "coming
-                  // soon!" snackbar). Now opens the real, fully working
-                  // ManageStaffScreen (attendance, salary due, permissions).
+                  label: loc.tr('staff'),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -274,7 +272,7 @@ class MoreScreen extends StatelessWidget {
                   icon: Icons.calendar_month_outlined,
                   iconColor: const Color(0xFF1565C0),
                   iconBg: const Color(0xFFE8EAF6),
-                  label: 'Collection',
+                  label: loc.tr('collection'),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -285,7 +283,7 @@ class MoreScreen extends StatelessWidget {
                   icon: Icons.security_outlined,
                   iconColor: const Color(0xFFB71C1C),
                   iconBg: const Color(0xFFFFEBEE),
-                  label: 'Shop\nInsurance',
+                  label: loc.tr('shop_insurance'),
                   onTap: () => _showShopInsurance(context),
                 ),
               ]),
@@ -301,20 +299,18 @@ class MoreScreen extends StatelessWidget {
                   _AccordionSection(
                     icon: Icons.settings_outlined,
                     iconColor: const Color(0xFF424242),
-                    title: 'Settings',
+                    title: loc.tr('settings'),
                     children: [
-                      // SMS Settings → dedicated SmsSettingsScreen
                       _AccordionRow(
-                        label: 'SMS Settings',
+                        label: loc.tr('sms_settings'),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                               builder: (_) => const SmsSettingsScreen()),
                         ),
                       ),
-                      // Payment Settings → dedicated PaymentSettingsScreen
                       _AccordionRow(
-                        label: 'Payment Settings',
+                        label: loc.tr('payment_settings'),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -323,15 +319,12 @@ class MoreScreen extends StatelessWidget {
                         ),
                       ),
                       _AccordionRow(
-                        label: 'Recycle Bin',
+                        label: loc.tr('recycle_bin'),
                         onTap: () => _showRecycleBin(context),
                       ),
-                      // App Lock → dedicated AppLockScreen (PIN create/change),
-                      // never the full SettingsScreen.
                       const _AppLockToggleRow(),
-                      // Language → dedicated LanguageScreen (non-onboarding)
                       _AccordionRow(
-                        label: 'Language',
+                        label: loc.tr('language'),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -340,18 +333,15 @@ class MoreScreen extends StatelessWidget {
                         ),
                       ),
                       _AccordionRow(
-                        label: 'Backup Information',
+                        label: loc.tr('backup_information'),
                         onTap: () => _showBackupInfo(context),
                       ),
                       _AccordionRow(
-                        // FIX: opens the real Delete Khata flow (type-to-
-                        // confirm → soft delete → Recycle Bin) instead of a
-                        // "contact support" dead end.
-                        label: 'Delete Khata',
+                        label: loc.tr('delete_khata'),
                         onTap: () => _confirmDeleteKhata(context),
                       ),
                       _AccordionRow(
-                        label: 'App Update',
+                        label: loc.tr('app_update'),
                         onTap: () => _showAppUpdate(context),
                         isLast: true,
                       ),
@@ -361,18 +351,18 @@ class MoreScreen extends StatelessWidget {
                   _AccordionSection(
                     icon: Icons.help_outline_rounded,
                     iconColor: const Color(0xFF1565C0),
-                    title: 'Help & Support',
+                    title: loc.tr('help_support'),
                     children: [
                       _AccordionRow(
-                        label: 'FAQs',
+                        label: loc.tr('faqs'),
                         onTap: () => _showFAQs(context),
                       ),
                       _AccordionRow(
-                        label: 'Help on WhatsApp',
+                        label: loc.tr('help_on_whatsapp'),
                         onTap: () => _openWhatsAppHelp(context),
                       ),
                       _AccordionRow(
-                        label: 'Call Us',
+                        label: loc.tr('call_us'),
                         onTap: () => _callSupport(context),
                         isLast: true,
                       ),
@@ -382,18 +372,18 @@ class MoreScreen extends StatelessWidget {
                   _AccordionSection(
                     icon: Icons.info_outline_rounded,
                     iconColor: const Color(0xFF1565C0),
-                    title: 'About Us',
+                    title: loc.tr('about_us'),
                     children: [
                       _AccordionRow(
-                        label: 'About GBook',
+                        label: loc.tr('about_gbook'),
                         onTap: () => _showAboutUs(context),
                       ),
                       _AccordionRow(
-                        label: 'Privacy Policy',
+                        label: loc.tr('privacy_policy'),
                         onTap: () => _showPrivacyPolicy(context),
                       ),
                       _AccordionRow(
-                        label: 'Terms & Conditions',
+                        label: loc.tr('terms_conditions'),
                         onTap: () => _showTerms(context),
                         isLast: true,
                       ),
@@ -428,14 +418,14 @@ class MoreScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Invite your friends to use GBook',
-                            style: TextStyle(
+                          Text(
+                            loc.tr('invite_friends_subtitle'),
+                            style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF616161)),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Invite Friends',
+                            loc.tr('invite_friends'),
                             style: TextStyle(
                               color: AppTheme.primaryColor,
                               fontWeight: FontWeight.w700,
@@ -499,7 +489,7 @@ class MoreScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Backup Information'),
+        title: Text(context.read<LocaleProvider>().tr('backup_information')),
         content: const Text(
           'Your data is automatically backed up when your phone is connected to the internet.\n\n'
           'In case you format this phone or mistakenly delete the app, just download the app again '
@@ -514,9 +504,6 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
-  // FIX: navigates to the real DeleteKhataScreen (type-to-confirm) instead
-  // of showing a static "contact support" dialog with no actual delete
-  // logic behind it.
   void _confirmDeleteKhata(BuildContext context) {
     Navigator.push(
       context,
@@ -528,7 +515,7 @@ class MoreScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('App Update'),
+        title: Text(context.read<LocaleProvider>().tr('app_update')),
         content: const Text('You are using the latest version of GBook (v1.0.0).'),
         actions: [
           TextButton(
@@ -539,9 +526,6 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
-  // ── FIX: real WhatsApp launch instead of a no-op SnackBar ────────────────
-  // Tries the native WhatsApp app first (whatsapp://), then falls back to
-  // the wa.me web link if WhatsApp isn't installed / can't be resolved.
   Future<void> _openWhatsAppHelp(BuildContext context) async {
     const supportPhone = '911800000000'; // country code + number, digits only
     const message = 'Hi, I need help with GBook.';
@@ -584,7 +568,7 @@ class MoreScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Call Us'),
+        title: Text(context.read<LocaleProvider>().tr('call_us')),
         content: const Text('Support: +91 1800-000-000\n(Mon–Sat, 9 AM – 7 PM)'),
         actions: [
           TextButton(
@@ -706,8 +690,8 @@ class MoreScreen extends StatelessWidget {
                   color: Color(0xFFB71C1C), size: 36),
             ),
             const SizedBox(height: 16),
-            const Text('Shop Insurance',
-                style: TextStyle(
+            Text(context.read<LocaleProvider>().tr('shop_insurance').replaceAll('\n', ' '),
+                style: const TextStyle(
                     fontWeight: FontWeight.w700, fontSize: 18)),
             const SizedBox(height: 8),
             const Text(
@@ -767,8 +751,8 @@ class MoreScreen extends StatelessWidget {
                   color: Color(0xFF25D366), size: 36),
             ),
             const SizedBox(height: 16),
-            const Text('Invite Friends',
-                style: TextStyle(
+            Text(context.read<LocaleProvider>().tr('invite_friends'),
+                style: const TextStyle(
                     fontWeight: FontWeight.w700, fontSize: 18)),
             const SizedBox(height: 8),
             const Text(
@@ -819,7 +803,6 @@ class MoreScreen extends StatelessWidget {
     );
   }
 
-  // ── FIX: full-page, categorized FAQ screen (matches Khatabook layout) ────
   void _showFAQs(BuildContext context) {
     Navigator.push(
       context,
@@ -882,9 +865,6 @@ class MoreScreen extends StatelessWidget {
 }
 
 // ── Recycle Bin sheet ─────────────────────────────────────────────────────────
-// FIX: was a static "Recycle bin is empty" placeholder with no query behind
-// it. Now actually loads soft-deleted khatas (business_profile.deletedAt)
-// and soft-deleted bills (bills.deletedAt) and lets the user restore either.
 class _RecycleBinSheet extends StatefulWidget {
   const _RecycleBinSheet();
 
@@ -947,6 +927,7 @@ class _RecycleBinSheetState extends State<_RecycleBinSheet> {
   @override
   Widget build(BuildContext context) {
     final isEmpty = _deletedBooks.isEmpty && _deletedBills.isEmpty;
+    final loc = context.watch<LocaleProvider>();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
@@ -961,9 +942,9 @@ class _RecycleBinSheetState extends State<_RecycleBinSheet> {
               children: [
                 const Icon(Icons.delete_outline, color: Color(0xFF424242)),
                 const SizedBox(width: 10),
-                const Text('Recycle Bin',
+                Text(loc.tr('recycle_bin'),
                     style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                 const Spacer(),
                 IconButton(
                     icon: const Icon(Icons.close),
@@ -1349,6 +1330,7 @@ class _AppLockToggleRowState extends State<_AppLockToggleRow> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     return Column(
       children: [
         InkWell(
@@ -1357,10 +1339,10 @@ class _AppLockToggleRowState extends State<_AppLockToggleRow> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'App Lock',
-                    style: TextStyle(fontSize: 14, color: Color(0xFF212121)),
+                    loc.tr('app_lock'),
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF212121)),
                   ),
                 ),
                 if (_loading)
@@ -1434,6 +1416,9 @@ class _StaffFeatureRow extends StatelessWidget {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // FAQ — categorized, fully working (Khatabook-style)
+// Left in English on purpose (per the earlier localization pass) — the
+// FAQ question/answer bodies are content, not chrome, so they were kept
+// as-is rather than run through context.tr().
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _FaqItem {
@@ -1647,6 +1632,7 @@ class _FaqCategoriesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
@@ -1655,9 +1641,9 @@ class _FaqCategoriesScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'FAQs',
-          style: TextStyle(
+        title: Text(
+          loc.tr('faqs'),
+          style: const TextStyle(
               color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
         ),
         elevation: 0,

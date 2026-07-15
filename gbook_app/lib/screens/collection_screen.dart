@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../providers/locale_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import 'customer_screen.dart';
@@ -81,13 +82,14 @@ class _CollectionScreenState extends State<CollectionScreen>
       list.fold(0.0, (s, c) => s + c.balance);
 
   Future<void> _setNewDate(Customer customer) async {
+    final loc = context.read<LocaleProvider>();
     final current = _collectionDates[customer.id] ?? DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: current,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Set Collection Date',
+      helpText: loc.tr('set_collection_date_title'),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
@@ -102,13 +104,15 @@ class _CollectionScreenState extends State<CollectionScreen>
       setState(() => _collectionDates[customer.id] = picked);
       AppHelpers.showSuccessSnackBar(
         context,
-        'Collection date set to ${AppHelpers.formatDate(picked)}',
+        loc.trParams('collection_date_set_to',
+            {'date': AppHelpers.formatDate(picked)}),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final provider = context.watch<CustomerProvider>();
     final all = provider.customers;
 
@@ -128,15 +132,15 @@ class _CollectionScreenState extends State<CollectionScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF1565C0),
         foregroundColor: Colors.white,
-        title: const Text(
-          'Collection',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+        title: Text(
+          loc.tr('collection'),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.help_outline, color: Colors.white),
-            onPressed: () => _showHelp(context),
+            onPressed: () => _showHelp(context, loc),
           ),
         ],
       ),
@@ -154,9 +158,9 @@ class _CollectionScreenState extends State<CollectionScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Collect Money 3x Faster',
-                        style: TextStyle(
+                      Text(
+                        loc.tr('collect_money_faster'),
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
@@ -165,8 +169,8 @@ class _CollectionScreenState extends State<CollectionScreen>
                       const SizedBox(height: 6),
                       Text(
                         all.isEmpty
-                            ? 'Add customers to start tracking collections'
-                            : 'Well Done! Collection Date set for everyone',
+                            ? loc.tr('add_customers_track_collections')
+                            : loc.tr('well_done_collection_set'),
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 13,
@@ -211,10 +215,9 @@ class _CollectionScreenState extends State<CollectionScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('PENDING'),
+                      Text(loc.tr('tab_pending')),
                       if (pendingTotal > 0)
                         Text(
-                          // FIX: Use formatCurrencyCompact which already has ₹
                           AppHelpers.formatCurrencyCompact(pendingTotal),
                           style: const TextStyle(
                             color: Color(0xFFB71C1C),
@@ -229,10 +232,9 @@ class _CollectionScreenState extends State<CollectionScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('TODAY'),
+                      Text(loc.tr('tab_today')),
                       if (todayTotal > 0)
                         Text(
-                          // FIX: Use formatCurrencyCompact which already has ₹
                           AppHelpers.formatCurrencyCompact(todayTotal),
                           style: const TextStyle(
                             color: Color(0xFF1565C0),
@@ -247,10 +249,9 @@ class _CollectionScreenState extends State<CollectionScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('UPCOMING'),
+                      Text(loc.tr('tab_upcoming')),
                       if (upcomingTotal > 0)
                         Text(
-                          // FIX: Use formatCurrencyCompact which already has ₹
                           AppHelpers.formatCurrencyCompact(upcomingTotal),
                           style: const TextStyle(
                             color: Color(0xFF2E7D32),
@@ -299,22 +300,16 @@ class _CollectionScreenState extends State<CollectionScreen>
     );
   }
 
-  void _showHelp(BuildContext context) {
+  void _showHelp(BuildContext context, LocaleProvider loc) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('About Collection'),
-        content: const Text(
-          'Collection helps you track when you expect to receive payments from customers.\n\n'
-          '• Pending: Overdue collections\n'
-          '• Today: Collections due today\n'
-          '• Upcoming: Future scheduled collections\n\n'
-          'Tap "Set New Date" on any customer to schedule their collection date.',
-        ),
+        title: Text(loc.tr('about_collection')),
+        content: Text(loc.tr('about_collection_body')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Got it'),
+            child: Text(loc.tr('got_it')),
           ),
         ],
       ),
@@ -322,7 +317,7 @@ class _CollectionScreenState extends State<CollectionScreen>
   }
 }
 
-// ── Collection Tile — FIX: removed extra ₹ prefix ─────────────────────────────
+// ── Collection Tile ─────────────────────────────────────────────────────
 class _CollectionTile extends StatelessWidget {
   final Customer customer;
   final DateTime? collectionDate;
@@ -338,6 +333,7 @@ class _CollectionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -390,7 +386,7 @@ class _CollectionTile extends StatelessWidget {
                       Text(
                         collectionDate != null
                             ? AppHelpers.formatDate(collectionDate!)
-                            : 'No date set',
+                            : loc.tr('no_date_set'),
                         style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFF9E9E9E),
@@ -402,7 +398,7 @@ class _CollectionTile extends StatelessWidget {
               ),
             ),
 
-            // Amount + action — FIX: formatCurrencyCompact already has ₹
+            // Amount + action
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -417,18 +413,18 @@ class _CollectionTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 GestureDetector(
                   onTap: onSetDate,
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Set New Date',
-                        style: TextStyle(
+                        loc.tr('set_new_date'),
+                        style: const TextStyle(
                           color: Color(0xFF1565C0),
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
                         ),
                       ),
-                      Icon(
+                      const Icon(
                         Icons.chevron_right,
                         size: 16,
                         color: Color(0xFF1565C0),
@@ -452,15 +448,16 @@ class _EmptyCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = [
-      'No pending collections',
-      'No collections today',
-      'No upcoming collections',
+    final loc = context.watch<LocaleProvider>();
+    final labels = [
+      loc.tr('no_pending_collections'),
+      loc.tr('no_collections_today'),
+      loc.tr('no_upcoming_collections'),
     ];
-    const subtitles = [
-      'All dues are up to date!',
-      'Nothing scheduled for today.',
-      'Set collection dates on customers to plan ahead.',
+    final subtitles = [
+      loc.tr('all_dues_up_to_date'),
+      loc.tr('nothing_scheduled_today'),
+      loc.tr('set_dates_plan_ahead'),
     ];
     const icons = [
       Icons.check_circle_outline,

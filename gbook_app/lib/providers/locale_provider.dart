@@ -57,6 +57,12 @@ class LocaleProvider extends ChangeNotifier {
 
   String tr(String key) => AppLocalizations(_languageCode).get(key);
 
+  /// Same as [tr] but for strings containing `{placeholder}` tokens, e.g.
+  /// the translation for 'delete_khata_body' contains `{name}` — call this
+  /// as `trParams('delete_khata_body', {'name': businessName})`.
+  String trParams(String key, Map<String, String> params) =>
+      AppLocalizations(_languageCode).getParams(key, params);
+
   String get currentLanguageName {
     final lang = supportedLanguages.firstWhere(
       (l) => l['code'] == _languageCode,
