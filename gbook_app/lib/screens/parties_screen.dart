@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import '../widgets/widgets.dart';
+import '../providers/locale_provider.dart';
 import 'add_customer_screen.dart';
 import 'add_party_screen.dart';
 import 'customer_screen.dart';
@@ -56,6 +57,7 @@ class _PartiesScreenState extends State<PartiesScreen>
     }
 
     if (!context.mounted) return;
+    final loc = context.read<LocaleProvider>();
 
     showModalBottomSheet(
       context: context,
@@ -68,6 +70,7 @@ class _PartiesScreenState extends State<PartiesScreen>
           books: allBooks,
           counts: counts,
           activeId: auth.profile?.id ?? '',
+          loc: loc,
           onSelect: (book) async {
             Navigator.pop(ctx);
             await LocalDatabase.instance.setActiveBusinessProfile(book.id);
@@ -97,6 +100,7 @@ class _PartiesScreenState extends State<PartiesScreen>
     final nameCtrl = TextEditingController();
     final ownerCtrl = TextEditingController();
     bool saving = false;
+    final loc = context.read<LocaleProvider>();
 
     showModalBottomSheet(
       context: context,
@@ -128,20 +132,20 @@ class _PartiesScreenState extends State<PartiesScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text('Create New Khatabook',
-                    style: TextStyle(
+                Text(loc.tr('create_new_khatabook_title'),
+                    style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
-                const Text(
-                  'You can maintain separate books for different businesses.',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
+                Text(
+                  loc.tr('create_new_khatabook_desc'),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
                 ),
                 const SizedBox(height: 20),
                 TextField(
                   controller: nameCtrl,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    labelText: 'Business / Khata Name *',
+                    labelText: loc.tr('business_khata_name'),
                     prefixIcon:
                         const Icon(Icons.store_outlined, size: 20),
                     border: OutlineInputBorder(
@@ -158,7 +162,7 @@ class _PartiesScreenState extends State<PartiesScreen>
                   controller: ownerCtrl,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    labelText: 'Owner Name',
+                    labelText: loc.tr('owner_name'),
                     prefixIcon:
                         const Icon(Icons.person_outline, size: 20),
                     border: OutlineInputBorder(
@@ -187,9 +191,9 @@ class _PartiesScreenState extends State<PartiesScreen>
                             final name = nameCtrl.text.trim();
                             if (name.isEmpty) {
                               ScaffoldMessenger.of(ctx).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                     content: Text(
-                                        'Please enter a business name')),
+                                        loc.tr('enter_business_name'))),
                               );
                               return;
                             }
@@ -210,8 +214,10 @@ class _PartiesScreenState extends State<PartiesScreen>
                                 .createBusinessProfile(newBook);
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (context.mounted) {
-                              AppHelpers.showSuccessSnackBar(context,
-                                  '"$name" khatabook created! Tap to switch.');
+                              AppHelpers.showSuccessSnackBar(
+                                  context,
+                                  loc.getParams('khatabook_created',
+                                      {'name': name}));
                               // Re-open switcher so user can immediately switch
                               Future.delayed(
                                   const Duration(milliseconds: 300),
@@ -228,8 +234,8 @@ class _PartiesScreenState extends State<PartiesScreen>
                             height: 20,
                             child: CircularProgressIndicator(
                                 color: Colors.white, strokeWidth: 2))
-                        : const Text('CREATE KHATABOOK',
-                            style: TextStyle(
+                        : Text(loc.tr('create_khatabook_caps'),
+                            style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15)),
                   ),
@@ -248,6 +254,7 @@ class _PartiesScreenState extends State<PartiesScreen>
     final auth = context.read<AuthProvider>();
     final nameCtrl =
         TextEditingController(text: auth.profile?.businessName ?? '');
+    final loc = context.read<LocaleProvider>();
 
     showModalBottomSheet(
       context: context,
@@ -278,15 +285,15 @@ class _PartiesScreenState extends State<PartiesScreen>
                 ),
               ),
               const SizedBox(height: 20),
-              const Text('Edit Business',
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text(loc.tr('edit_business_title'),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
               TextField(
                 controller: nameCtrl,
                 textCapitalization: TextCapitalization.words,
                 decoration: InputDecoration(
-                  labelText: 'Business Name',
+                  labelText: loc.tr('business_name_label'),
                   prefixIcon:
                       const Icon(Icons.store_outlined, size: 20),
                   border: OutlineInputBorder(
@@ -316,11 +323,11 @@ class _PartiesScreenState extends State<PartiesScreen>
                     await auth.updateBusiness({'name': name});
                     if (mounted) {
                       AppHelpers.showSuccessSnackBar(
-                          context, 'Business name updated!');
+                          context, loc.tr('business_name_updated'));
                     }
                   },
-                  child: const Text('Save Changes',
-                      style: TextStyle(
+                  child: Text(loc.tr('save_changes'),
+                      style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 15)),
                 ),
               ),
@@ -331,8 +338,8 @@ class _PartiesScreenState extends State<PartiesScreen>
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.person_outline,
                       color: AppTheme.primaryColor, size: 18),
-                  label: const Text('Edit Full Profile',
-                      style: TextStyle(
+                  label: Text(loc.tr('edit_full_profile'),
+                      style: const TextStyle(
                           color: AppTheme.primaryColor,
                           fontWeight: FontWeight.w600,
                           fontSize: 14)),
@@ -361,6 +368,7 @@ class _PartiesScreenState extends State<PartiesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       resizeToAvoidBottomInset: false,
@@ -402,7 +410,7 @@ class _PartiesScreenState extends State<PartiesScreen>
             icon: const Icon(Icons.edit_outlined,
                 color: Colors.white, size: 20),
             onPressed: () => _showEditBusinessSheet(context),
-            tooltip: 'Edit Business',
+            tooltip: loc.tr('edit_business'),
           ),
         ],
         bottom: TabBar(
@@ -414,19 +422,36 @@ class _PartiesScreenState extends State<PartiesScreen>
           labelStyle: const TextStyle(
               fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: 1),
           unselectedLabelStyle: const TextStyle(fontSize: 14),
-          tabs: const [
-            Tab(text: 'CUSTOMERS'),
-            Tab(text: 'SUPPLIERS'),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          tabs: [
+            Tab(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  loc.tr('customers').toUpperCase(),
+                  maxLines: 1,
+                ),
+              ),
+            ),
+            Tab(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  loc.tr('suppliers').toUpperCase(),
+                  maxLines: 1,
+                ),
+              ),
+            ),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: const [
-          _CustomersTab(),
-          _SuppliersTab(),
-        ],
-      ),
+     body: TabBarView(
+  controller: _tabs,
+  children: const [
+    _CustomersTab(),
+    _SuppliersTab(),
+  ],
+),
     );
   }
 }
@@ -438,6 +463,7 @@ class _KhatabookSwitcherSheet extends StatelessWidget {
   final List<BusinessProfile> books;
   final Map<String, int> counts;
   final String activeId;
+  final LocaleProvider loc;
   final void Function(BusinessProfile) onSelect;
   final VoidCallback onCreateNew;
 
@@ -445,6 +471,7 @@ class _KhatabookSwitcherSheet extends StatelessWidget {
     required this.books,
     required this.counts,
     required this.activeId,
+    required this.loc,
     required this.onSelect,
     required this.onCreateNew,
   });
@@ -468,14 +495,15 @@ class _KhatabookSwitcherSheet extends StatelessWidget {
             ),
           ),
           // Title
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
-            child: Row(
-              children: [
-                Text('Select Khatabook',
-                    style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w700)),
-              ],
+         // Title
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Text(
+              loc.tr('select_khatabook'),
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           const Divider(height: 1),
@@ -547,7 +575,7 @@ class _KhatabookSwitcherSheet extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '$customerCount Customer${customerCount == 1 ? '' : 's'}',
+                                '$customerCount ${customerCount == 1 ? loc.tr('customers').replaceAll('s', '') : loc.tr('customers')}',
                                 style: const TextStyle(
                                     fontSize: 12,
                                     color: Color(0xFF9E9E9E)),
@@ -568,26 +596,31 @@ class _KhatabookSwitcherSheet extends StatelessWidget {
           const Divider(height: 1),
 
           // Create new
+         // Create new
           InkWell(
             onTap: onCreateNew,
-            child: const Padding(
-              padding:
-                  EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 18),
               child: Row(
                 children: [
-                  CircleAvatar(
+                  const CircleAvatar(
                     radius: 24,
                     backgroundColor: Color(0xFF1565C0),
                     child: Icon(Icons.add, color: Colors.white, size: 22),
                   ),
-                  SizedBox(width: 14),
-                  Text(
-                    'CREATE NEW KHATABOOK',
-                    style: TextStyle(
-                      color: Color(0xFF1565C0),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      letterSpacing: 0.5,
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      loc.tr('create_new_khatabook_caps'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF1565C0),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                 ],
@@ -629,6 +662,7 @@ class _CustomersTabState extends State<_CustomersTab> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final provider = context.watch<CustomerProvider>();
     final allCustomers = provider.customers
         .where((c) =>
@@ -655,7 +689,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      label: 'You will give',
+                      label: loc.tr('you_will_give'),
                       amount: provider.totalPayable,
                       color: const Color(0xFF00796B),
                     ),
@@ -668,7 +702,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                   ),
                   Expanded(
                     child: _SummaryCard(
-                      label: 'You will get',
+                      label: loc.tr('you_will_get'),
                       amount: provider.totalReceivable,
                       color: const Color(0xFFB71C1C),
                     ),
@@ -678,7 +712,7 @@ class _CustomersTabState extends State<_CustomersTab> {
               const SizedBox(height: 10),
               _OutlineButton(
                 icon: Icons.picture_as_pdf_outlined,
-                label: 'View Reports',
+                label: loc.tr('view_reports'),
                 color: const Color(0xFF1565C0),
                 onTap: () => Navigator.push(
                   context,
@@ -689,7 +723,7 @@ class _CustomersTabState extends State<_CustomersTab> {
           ),
         ),
 
-        Container(
+       Container(
           color: Colors.white,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Column(
@@ -700,7 +734,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                     child: TextField(
                       controller: _searchCtrl,
                       decoration: InputDecoration(
-                        hintText: 'Search Customer',
+                        hintText: loc.tr('search_customer_hint'),
                         hintStyle: const TextStyle(
                             fontSize: 13, color: Color(0xFFBDBDBD)),
                         prefixIcon: const Icon(Icons.search,
@@ -727,33 +761,36 @@ class _CustomersTabState extends State<_CustomersTab> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _CashbookButton(onTap: _openCashbook),
+                  _CashbookButton(onTap: _openCashbook, label: loc.tr('cashbook')),
                 ],
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  _FilterChip(
-                      label: 'All',
-                      selected: _filter == 'all',
-                      onTap: () => setState(() => _filter = 'all')),
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                      label: 'To Get',
-                      selected: _filter == 'toGet',
-                      onTap: () => setState(() => _filter = 'toGet')),
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                      label: 'To Give',
-                      selected: _filter == 'toGive',
-                      onTap: () => setState(() => _filter = 'toGive')),
-                  const Spacer(),
-                  Text(
-                    '${customers.length} ${customers.length == 1 ? 'party' : 'parties'}',
-                    style: const TextStyle(
-                        fontSize: 12, color: Color(0xFF9E9E9E)),
-                  ),
-                ],
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                        label: loc.tr('filter_all'),
+                        selected: _filter == 'all',
+                        onTap: () => setState(() => _filter = 'all')),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                        label: loc.tr('to_get_filter'),
+                        selected: _filter == 'toGet',
+                        onTap: () => setState(() => _filter = 'toGet')),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                        label: loc.tr('to_give_filter'),
+                        selected: _filter == 'toGive',
+                        onTap: () => setState(() => _filter = 'toGive')),
+                    const SizedBox(width: 16),
+                    Text(
+                      '${customers.length} ${customers.length == 1 ? loc.tr('party_singular') : loc.tr('party_plural')}',
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF9E9E9E)),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -765,13 +802,7 @@ class _CustomersTabState extends State<_CustomersTab> {
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
               : customers.isEmpty
-                  ? _CustomerEmptyState(
-                      onAddCustomer: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const AddCustomerScreen()),
-                      ),
-                    )
+                  ? _CustomerEmptyState(loc: loc)
                   : RefreshIndicator(
                       onRefresh: () =>
                           context.read<CustomerProvider>().loadCustomers(),
@@ -781,7 +812,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                         separatorBuilder: (_, __) =>
                             const Divider(height: 1, indent: 68),
                         itemBuilder: (_, i) =>
-                            _CustomerTile(customer: customers[i]),
+                            _CustomerTile(customer: customers[i], loc: loc),
                       ),
                     ),
         ),
@@ -807,8 +838,8 @@ class _CustomersTabState extends State<_CustomersTab> {
                       builder: (_) => const AddCustomerScreen()),
                 ),
                 icon: const Icon(Icons.person_add, size: 18),
-                label: const Text('ADD CUSTOMER',
-                    style: TextStyle(
+                label: Text(loc.tr('add_customer_caps'),
+                    style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 14)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentRed,
@@ -854,6 +885,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final provider = context.watch<SupplierProvider>();
     final suppliers = provider.suppliers
         .where((s) =>
@@ -879,7 +911,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      label: 'You will give',
+                      label: loc.tr('you_will_give'),
                       amount: totalToGive,
                       color: const Color(0xFF00796B),
                     ),
@@ -892,7 +924,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                   ),
                   Expanded(
                     child: _SummaryCard(
-                      label: 'You will get',
+                      label: loc.tr('you_will_get'),
                       amount: totalToGet,
                       color: const Color(0xFFB71C1C),
                     ),
@@ -902,7 +934,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
               const SizedBox(height: 10),
               _OutlineButton(
                 icon: Icons.picture_as_pdf_outlined,
-                label: 'View Reports',
+                label: loc.tr('view_reports'),
                 color: const Color(0xFF1565C0),
                 onTap: () => Navigator.push(
                   context,
@@ -922,7 +954,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                 child: TextField(
                   controller: _searchCtrl,
                   decoration: InputDecoration(
-                    hintText: 'Search Supplier',
+                    hintText: loc.tr('search_supplier_hint'),
                     prefixIcon: const Icon(Icons.search,
                         size: 20, color: Color(0xFF9E9E9E)),
                     suffixIcon: _query.isNotEmpty
@@ -946,7 +978,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              _CashbookButton(onTap: _openCashbook),
+              _CashbookButton(onTap: _openCashbook, label: loc.tr('cashbook')),
             ],
           ),
         ),
@@ -956,14 +988,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
           child: provider.loading
               ? const Center(child: CircularProgressIndicator())
               : suppliers.isEmpty
-                  ? _SupplierEmptyState(
-                      onAddSupplier: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                const AddPartyScreen(isSupplier: true)),
-                      ),
-                    )
+                  ? _SupplierEmptyState(loc: loc)
                   : RefreshIndicator(
                       onRefresh: () =>
                           context.read<SupplierProvider>().loadSuppliers(),
@@ -973,7 +998,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                         separatorBuilder: (_, __) =>
                             const Divider(height: 1, indent: 68),
                         itemBuilder: (_, i) =>
-                            _SupplierTile(supplier: suppliers[i]),
+                            _SupplierTile(supplier: suppliers[i], loc: loc),
                       ),
                     ),
         ),
@@ -1000,8 +1025,8 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                           const AddPartyScreen(isSupplier: true)),
                 ),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('ADD SUPPLIER',
-                    style: TextStyle(
+                label: Text(loc.tr('add_supplier_caps'),
+                    style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 14)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
@@ -1023,7 +1048,8 @@ class _SuppliersTabState extends State<_SuppliersTab> {
 // ── Cashbook quick-access button ──────────────────────────────────────────────
 class _CashbookButton extends StatelessWidget {
   final VoidCallback onTap;
-  const _CashbookButton({required this.onTap});
+  final String label;
+  const _CashbookButton({required this.onTap, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1032,24 +1058,29 @@ class _CashbookButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        constraints: const BoxConstraints(maxWidth: 110),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppTheme.primaryColor),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.menu_book_outlined,
+            const Icon(Icons.menu_book_outlined,
                 size: 18, color: AppTheme.primaryColor),
-            SizedBox(width: 6),
-            Text(
-              'Cashbook',
-              style: TextStyle(
-                color: AppTheme.primaryColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppTheme.primaryColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
             ),
           ],
@@ -1062,7 +1093,8 @@ class _CashbookButton extends StatelessWidget {
 // ── Supplier Tile ─────────────────────────────────────────────────────────────
 class _SupplierTile extends StatelessWidget {
   final Supplier supplier;
-  const _SupplierTile({required this.supplier});
+  final LocaleProvider loc;
+  const _SupplierTile({required this.supplier, required this.loc});
 
   @override
   Widget build(BuildContext context) {
@@ -1074,10 +1106,10 @@ class _SupplierTile extends StatelessWidget {
             ? const Color(0xFFB71C1C)
             : const Color(0xFF9E9E9E);
     final label = balance > 0
-        ? 'You will get'
+        ? loc.tr('you_will_get')
         : balance < 0
-            ? 'You will give'
-            : 'Settled';
+            ? loc.tr('you_will_give')
+            : loc.tr('settled');
 
     return InkWell(
       onTap: () => Navigator.push(
@@ -1147,8 +1179,8 @@ class _SupplierTile extends StatelessWidget {
                 ],
               )
             else
-              const Text('Settled',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E))),
+              Text(loc.tr('settled'),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF9E9E9E))),
           ],
         ),
       ),
@@ -1211,6 +1243,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
     );
 
     if (newTx != null && mounted) {
+      final loc = context.read<LocaleProvider>();
       await context.read<CustomerProvider>().addTransaction(newTx!);
       if (!mounted) return;
       final double delta = newTx!.isGiven ? newTx!.amount : -newTx!.amount;
@@ -1222,11 +1255,12 @@ class _SupplierScreenState extends State<SupplierScreen> {
         _supplier = updated;
         _transactions.insert(0, newTx!);
       });
-      AppHelpers.showSuccessSnackBar(context, 'Entry added');
+      AppHelpers.showSuccessSnackBar(context, loc.tr('entry_added'));
     }
   }
 
   void _deleteTransaction(String txId) async {
+    final loc = context.read<LocaleProvider>();
     final tx = _transactions.firstWhere(
       (t) => t.id == txId,
       orElse: () => CustomerTransaction(
@@ -1252,24 +1286,25 @@ class _SupplierScreenState extends State<SupplierScreen> {
       });
     }
     if (!mounted) return;
-    AppHelpers.showSuccessSnackBar(context, 'Entry deleted');
+    AppHelpers.showSuccessSnackBar(context, loc.tr('entry_deleted'));
   }
 
   Future<void> _deleteSupplier() async {
+    final loc = context.read<LocaleProvider>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete Supplier'),
-        content:
-            Text('Delete ${_supplier.name} and all their transactions?'),
+        title: Text(loc.tr('delete_supplier_title')),
+        content: Text(loc.getParams(
+            'delete_supplier_confirm', {'name': _supplier.name})),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+              child: Text(loc.tr('cancel'))),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete',
-                  style: TextStyle(color: Colors.red))),
+              child: Text(loc.tr('delete'),
+                  style: const TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -1296,6 +1331,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
   }
 
   Future<void> _callSupplier() async {
+    final loc = context.read<LocaleProvider>();
     if (_supplier.phone == null || _supplier.phone!.isEmpty) {
       AppHelpers.showErrorSnackBar(context, 'No phone number');
       return;
@@ -1304,12 +1340,12 @@ class _SupplierScreenState extends State<SupplierScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Call Supplier'),
+        title: Text(loc.tr('call_supplier_title')),
         content: Text('Phone: ${_supplier.phone}'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+            child: Text(loc.tr('close_label')),
           ),
         ],
       ),
@@ -1324,12 +1360,13 @@ class _SupplierScreenState extends State<SupplierScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final balance = _supplier.balance;
     final balanceLabel = balance > 0
-        ? 'You will get'
+        ? loc.tr('you_will_get')
         : balance < 0
-            ? 'You will give'
-            : 'Settled';
+            ? loc.tr('you_will_give')
+            : loc.tr('settled');
     final balanceColor = balance > 0
         ? const Color(0xFF00796B)
         : balance < 0
@@ -1388,15 +1425,12 @@ class _SupplierScreenState extends State<SupplierScreen> {
                           color: Colors.white.withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('Supplier',
-                            style: TextStyle(
+                        child: Text(loc.tr('suppliers').replaceAll('s', ''),
+                            style: const TextStyle(
                                 color: Colors.white, fontSize: 10)),
                       ),
                     ],
                   ),
-                  const Text('View settings',
-                      style: TextStyle(
-                          color: Colors.white70, fontSize: 11)),
                 ],
               ),
             ),
@@ -1447,13 +1481,13 @@ class _SupplierScreenState extends State<SupplierScreen> {
               children: [
                 GestureDetector(
                   onTap: _openReport,
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.picture_as_pdf_outlined,
+                      const Icon(Icons.picture_as_pdf_outlined,
                           size: 18, color: Color(0xFF555555)),
-                      SizedBox(width: 6),
-                      Text('Report',
-                          style: TextStyle(
+                      const SizedBox(width: 6),
+                      Text(loc.tr('report_label'),
+                          style: const TextStyle(
                               fontSize: 13,
                               color: Color(0xFF555555),
                               fontWeight: FontWeight.w500)),
@@ -1469,10 +1503,10 @@ class _SupplierScreenState extends State<SupplierScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _transactions.isEmpty
                     ? EmptyState(
-                        title: 'No transactions yet',
-                        subtitle: 'Add a payment or entry to get started',
+                        title: loc.tr('no_transactions_yet'),
+                        subtitle: loc.tr('add_payment_entry_hint'),
                         icon: Icons.receipt_long_outlined,
-                        actionLabel: 'Add Entry',
+                        actionLabel: loc.tr('add_entry'),
                         onAction: () => _showAddTransaction(true),
                       )
                     : RefreshIndicator(
@@ -1500,40 +1534,40 @@ class _SupplierScreenState extends State<SupplierScreen> {
                                           color: const Color(0xFFDDDDDD)),
                                     ),
                                     child: Text(
-                                      '$dateKey${_isToday(txs.first.date) ? " • Today" : ""}',
+                                      dateKey,
                                       style: const TextStyle(
                                           fontSize: 12,
                                           color: Color(0xFF555555)),
                                     ),
                                   ),
                                 ),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 4),
                                   child: Row(
                                     children: [
                                       Expanded(
                                         flex: 3,
-                                        child: Text('ENTRIES',
-                                            style: TextStyle(
+                                        child: Text(loc.tr('entries_label').toUpperCase(),
+                                            style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF9E9E9E),
                                                 fontWeight: FontWeight.w600,
                                                 letterSpacing: 0.5)),
                                       ),
                                       Expanded(
-                                        child: Text('YOU GAVE',
+                                        child: Text(loc.tr('you_gave_header'),
                                             textAlign: TextAlign.center,
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF9E9E9E),
                                                 fontWeight: FontWeight.w600,
                                                 letterSpacing: 0.5)),
                                       ),
                                       Expanded(
-                                        child: Text('YOU GOT',
+                                        child: Text(loc.tr('you_got_header'),
                                             textAlign: TextAlign.end,
-                                            style: TextStyle(
+                                            style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Color(0xFF9E9E9E),
                                                 fontWeight: FontWeight.w600,
@@ -1572,8 +1606,8 @@ class _SupplierScreenState extends State<SupplierScreen> {
                           borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _showAddTransaction(true),
-                    child: const Text('YOU GAVE  Rs.',
-                        style: TextStyle(
+                    child: Text(loc.tr('you_gave_rs'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                             letterSpacing: 0.5)),
@@ -1590,8 +1624,8 @@ class _SupplierScreenState extends State<SupplierScreen> {
                           borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () => _showAddTransaction(false),
-                    child: const Text('YOU GOT  Rs.',
-                        style: TextStyle(
+                    child: Text(loc.tr('you_got_rs'),
+                        style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
                             letterSpacing: 0.5)),
@@ -1603,13 +1637,6 @@ class _SupplierScreenState extends State<SupplierScreen> {
         ],
       ),
     );
-  }
-
-  bool _isToday(DateTime dt) {
-    final now = DateTime.now();
-    return dt.year == now.year &&
-        dt.month == now.month &&
-        dt.day == now.day;
   }
 }
 
@@ -1623,23 +1650,23 @@ class _SupplierTxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGave = tx.isGiven;
+    final loc = context.watch<LocaleProvider>();
 
     return GestureDetector(
       onLongPress: () async {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Delete Entry'),
-            content:
-                const Text('Are you sure you want to delete this entry?'),
+            title: Text(loc.tr('delete_entry')),
+            content: Text(loc.tr('delete_entry_confirm')),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel')),
+                  child: Text(loc.tr('cancel'))),
               TextButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Delete',
-                      style: TextStyle(color: Colors.red))),
+                  child: Text(loc.tr('delete'),
+                      style: const TextStyle(color: Colors.red))),
             ],
           ),
         );
@@ -1771,11 +1798,11 @@ class _SupplierTransactionSheetState
     super.dispose();
   }
 
-  void _submit() {
+  void _submit(LocaleProvider loc) {
     if (_submitted) return;
     final amount = double.tryParse(_amountCtrl.text.trim());
     if (amount == null || amount <= 0) {
-      AppHelpers.showErrorSnackBar(context, 'Enter a valid amount');
+      AppHelpers.showErrorSnackBar(context, loc.tr('enter_valid_amount'));
       return;
     }
     _submitted = true;
@@ -1794,10 +1821,11 @@ class _SupplierTransactionSheetState
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final isGave = widget.isGave;
     final color =
         isGave ? const Color(0xFFD32F2F) : const Color(0xFF1B5E20);
-    final label = isGave ? 'YOU GAVE' : 'YOU GOT';
+    final label = isGave ? loc.tr('you_gave_header') : loc.tr('you_got_header');
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1853,9 +1881,9 @@ class _SupplierTransactionSheetState
           const SizedBox(height: 12),
           TextField(
             controller: _noteCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Note / Remarks (optional)',
-              prefixIcon: Icon(Icons.note_outlined, size: 18),
+            decoration: InputDecoration(
+              labelText: loc.tr('note_remarks_optional'),
+              prefixIcon: const Icon(Icons.note_outlined, size: 18),
             ),
           ),
           const SizedBox(height: 12),
@@ -1873,8 +1901,8 @@ class _SupplierTransactionSheetState
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10))),
-              onPressed: _submitted ? null : _submit,
-              child: Text('Save $label Entry',
+              onPressed: _submitted ? null : () => _submit(loc),
+              child: Text(loc.getParams('save_label_entry', {'label': label}),
                   style: const TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 15)),
             ),
@@ -1946,8 +1974,6 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
     if (picked != null) setState(() => _endDate = picked);
   }
 
-  /// Download = generate PDF → open OS share sheet so user can save to
-  /// Downloads, Drive, email, etc.
   Future<void> _download() async {
     if (_isDownloading) return;
     setState(() => _isDownloading = true);
@@ -1966,8 +1992,6 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
     }
   }
 
-  /// Share = generate PDF → open OS share sheet (user picks WhatsApp /
-  /// email / Drive / etc.)
   Future<void> _share() async {
     if (_isSharing) return;
     setState(() => _isSharing = true);
@@ -1988,6 +2012,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.watch<LocaleProvider>();
     final rows = _filtered;
 
     return Scaffold(
@@ -1998,7 +2023,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Report of ${widget.supplier.name}',
+        title: Text('${loc.tr('report_label')} - ${widget.supplier.name}',
             style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -2016,7 +2041,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                   child: _DateChip(
                     label: _startDate != null
                         ? AppHelpers.formatDate(_startDate!)
-                        : 'START DATE',
+                        : loc.tr('start_date').toUpperCase(),
                     onTap: _pickStartDate,
                   ),
                 ),
@@ -2025,7 +2050,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                   child: _DateChip(
                     label: _endDate != null
                         ? AppHelpers.formatDate(_endDate!)
-                        : 'END DATE',
+                        : loc.tr('end_date').toUpperCase(),
                     onTap: _pickEndDate,
                   ),
                 ),
@@ -2041,8 +2066,8 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Net Balance',
-                    style: TextStyle(
+                Text(loc.tr('net_balance'),
+                    style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w700)),
                 Text(
                   'Rs. ${widget.supplier.balance.abs().toStringAsFixed(2)}',
@@ -2063,17 +2088,17 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                Text('${rows.length} Entries',
+                Text('${rows.length} ${loc.tr('entries_label')}',
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w700)),
                 const Spacer(),
                 Text(
-                    'You Gave: Rs. ${_totalGiven.toStringAsFixed(2)}',
+                    '${loc.tr('you_gave_colon')}: Rs. ${_totalGiven.toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontSize: 11, color: Color(0xFF9E9E9E))),
                 const SizedBox(width: 12),
                 Text(
-                    'You Got: Rs. ${_totalReceived.toStringAsFixed(2)}',
+                    '${loc.tr('you_got_colon')}: Rs. ${_totalReceived.toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontSize: 11, color: Color(0xFF9E9E9E))),
               ],
@@ -2086,30 +2111,30 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
             color: const Color(0xFFF5F5F5),
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: const Row(
+            child: Row(
               children: [
                 Expanded(
                   flex: 2,
-                  child: Text('Date',
-                      style: TextStyle(
+                  child: Text(loc.tr('date_label'),
+                      style: const TextStyle(
                           fontSize: 11,
                           color: Color(0xFF9E9E9E),
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.5)),
                 ),
                 Expanded(
-                  child: Text('YOU GAVE',
+                  child: Text(loc.tr('you_gave_header'),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                           fontSize: 11,
                           color: Color(0xFF9E9E9E),
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.5)),
                 ),
                 Expanded(
-                  child: Text('YOU GOT',
+                  child: Text(loc.tr('you_got_header'),
                       textAlign: TextAlign.end,
-                      style: TextStyle(
+                      style: const TextStyle(
                           fontSize: 11,
                           color: Color(0xFF9E9E9E),
                           fontWeight: FontWeight.w600,
@@ -2123,7 +2148,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
           Expanded(
             child: rows.isEmpty
                 ? Center(
-                    child: Text('No entries found',
+                    child: Text(loc.tr('no_entries_found'),
                         style: TextStyle(color: Colors.grey.shade500)),
                   )
                 : ListView.separated(
@@ -2234,7 +2259,9 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                         : const Icon(Icons.picture_as_pdf_outlined,
                             color: Color(0xFF1565C0)),
                     label: Text(
-                        _isDownloading ? 'PREPARING...' : 'DOWNLOAD PDF',
+                        _isDownloading
+                            ? loc.tr('preparing_dots')
+                            : loc.tr('download_pdf_caps'),
                         style: const TextStyle(
                             color: Color(0xFF1565C0),
                             fontWeight: FontWeight.w700)),
@@ -2257,7 +2284,10 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: Colors.white))
                         : const Icon(Icons.share, color: Colors.white),
-                    label: Text(_isSharing ? 'SHARING...' : 'SHARE PDF',
+                    label: Text(
+                        _isSharing
+                            ? loc.tr('sharing_dots')
+                            : loc.tr('share_pdf_caps'),
                         style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700)),
@@ -2421,7 +2451,8 @@ class _FilterChip extends StatelessWidget {
 
 class _CustomerTile extends StatelessWidget {
   final Customer customer;
-  const _CustomerTile({required this.customer});
+  final LocaleProvider loc;
+  const _CustomerTile({required this.customer, required this.loc});
 
   @override
   Widget build(BuildContext context) {
@@ -2432,7 +2463,7 @@ class _CustomerTile extends StatelessWidget {
         : balance < 0
             ? const Color(0xFFB71C1C)
             : Colors.grey;
-    final label = balance > 0 ? 'Will Give' : 'Will Get';
+    final label = balance > 0 ? loc.tr('will_give') : loc.tr('will_get');
 
     return InkWell(
       onTap: () => Navigator.push(
@@ -2495,8 +2526,8 @@ class _CustomerTile extends StatelessWidget {
                 ],
               )
             else
-              const Text('Settled',
-                  style: TextStyle(
+              Text(loc.tr('settled'),
+                  style: const TextStyle(
                       fontSize: 12, color: Color(0xFF9E9E9E))),
           ],
         ),
@@ -2506,8 +2537,8 @@ class _CustomerTile extends StatelessWidget {
 }
 
 class _CustomerEmptyState extends StatelessWidget {
-  final VoidCallback onAddCustomer;
-  const _CustomerEmptyState({required this.onAddCustomer});
+  final LocaleProvider loc;
+  const _CustomerEmptyState({required this.loc});
 
   @override
   Widget build(BuildContext context) {
@@ -2528,18 +2559,18 @@ class _CustomerEmptyState extends StatelessWidget {
                 Icon(Icons.people_alt_outlined,
                     size: 60, color: Colors.grey.shade400),
                 const SizedBox(height: 8),
-                Text('Collect payments faster',
+                Text(loc.tr('collect_payments_faster'),
                     style: TextStyle(
                         color: Colors.grey.shade500, fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
-              'Add customers & maintain your Khata',
-              style: TextStyle(
+              loc.tr('add_customers_maintain_khata'),
+              style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF424242)),
@@ -2553,8 +2584,8 @@ class _CustomerEmptyState extends StatelessWidget {
 }
 
 class _SupplierEmptyState extends StatelessWidget {
-  final VoidCallback onAddSupplier;
-  const _SupplierEmptyState({required this.onAddSupplier});
+  final LocaleProvider loc;
+  const _SupplierEmptyState({required this.loc});
 
   @override
   Widget build(BuildContext context) {
@@ -2574,17 +2605,17 @@ class _SupplierEmptyState extends StatelessWidget {
                 color: AppTheme.primaryColor.withValues(alpha: 0.5)),
           ),
           const SizedBox(height: 16),
-          const Text('No suppliers yet',
-              style: TextStyle(
+          Text(loc.tr('no_suppliers_yet'),
+              style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF424242))),
           const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 40),
-            child: Text('Add your suppliers to track payables',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(loc.tr('add_suppliers_track_payables'),
                 style:
-                    TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
+                    const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
                 textAlign: TextAlign.center),
           ),
         ],

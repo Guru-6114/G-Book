@@ -63,6 +63,13 @@ class LocaleProvider extends ChangeNotifier {
   String trParams(String key, Map<String, String> params) =>
       AppLocalizations(_languageCode).getParams(key, params);
 
+  /// FIX: alias for trParams — parties_screen.dart (and possibly other
+  /// screens) call `loc.getParams(...)` directly on LocaleProvider instead
+  /// of `loc.trParams(...)`. This was the root cause of the three
+  /// "undefined_method 'getParams'" analyzer errors. Both names now work.
+  String getParams(String key, Map<String, String> params) =>
+      trParams(key, params);
+
   String get currentLanguageName {
     final lang = supportedLanguages.firstWhere(
       (l) => l['code'] == _languageCode,

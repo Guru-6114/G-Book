@@ -23,6 +23,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../providers/locale_provider.dart';
+import '../l10n/app_localizations.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: IndexedStack(
@@ -98,23 +101,23 @@ class _HomeScreenState extends State<HomeScreen> {
           _fromMore = false;
           if (i == 1) _billsInitialSubTab = 0;
         }),
-        items: const [
+        items: [
           BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              activeIcon: Icon(Icons.people),
-              label: 'Parties'),
+              icon: const Icon(Icons.people_outline),
+              activeIcon: const Icon(Icons.people),
+              label: loc.get('parties')),
           BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long),
-              label: 'Bills'),
+              icon: const Icon(Icons.receipt_long_outlined),
+              activeIcon: const Icon(Icons.receipt_long),
+              label: loc.get('bills')),
           BottomNavigationBarItem(
-              icon: Icon(Icons.inventory_2_outlined),
-              activeIcon: Icon(Icons.inventory_2),
-              label: 'Items'),
+              icon: const Icon(Icons.inventory_2_outlined),
+              activeIcon: const Icon(Icons.inventory_2),
+              label: loc.get('items')),
           BottomNavigationBarItem(
-              icon: Icon(Icons.more_horiz_outlined),
-              activeIcon: Icon(Icons.more_horiz),
-              label: 'More'),
+              icon: const Icon(Icons.more_horiz_outlined),
+              activeIcon: const Icon(Icons.more_horiz),
+              label: loc.get('more')),
         ],
       ),
     );
@@ -193,14 +196,14 @@ class _BillsScreenState extends State<_BillsScreen>
     }
   }
 
-  String get _addBillLabel {
+  String _addBillLabel(AppLocalizations loc) {
     switch (_tabs.index) {
       case 1:
-        return 'ADD PURCHASE';
+        return loc.get('add_purchase_caps');
       case 2:
-        return 'ADD EXPENSE';
+        return loc.get('add_expense_caps');
       default:
-        return 'ADD BILL';
+        return loc.get('add_bill_caps');
     }
   }
 
@@ -235,6 +238,7 @@ class _BillsScreenState extends State<_BillsScreen>
   }
 
   Future<void> _openReturnFlow(BillType returnType) async {
+    final loc = context.l10n;
     final billProvider = context.read<BillProvider>();
     final sourceType = returnType == BillType.saleReturn
         ? BillType.sale
@@ -248,8 +252,8 @@ class _BillsScreenState extends State<_BillsScreen>
         SnackBar(
           content: Text(
             sourceType == BillType.sale
-                ? 'No sale bills yet to create a return against'
-                : 'No purchase bills yet to create a return against',
+                ? loc.get('no_sale_bills_yet')
+                : loc.get('no_purchase_bills_yet'),
           ),
         ),
       );
@@ -314,19 +318,20 @@ class _BillsScreenState extends State<_BillsScreen>
     );
   }
 
-  String _tabLabel(int i) {
-    switch (i) {
+  String _searchHint(AppLocalizations loc) {
+    switch (_tabs.index) {
       case 1:
-        return 'purchase';
+        return loc.get('search_purchase_transactions');
       case 2:
-        return 'expense';
+        return loc.get('search_expense_transactions');
       default:
-        return 'sales';
+        return loc.get('search_sales_transactions');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     final billProvider = context.watch<BillProvider>();
     final cashbook = context.watch<CashbookProvider>();
     final auth = context.watch<AuthProvider>();
@@ -408,10 +413,10 @@ class _BillsScreenState extends State<_BillsScreen>
                   fontSize: 14,
                   letterSpacing: 0.5),
               unselectedLabelStyle: const TextStyle(fontSize: 14),
-              tabs: const [
-                Tab(text: 'Sale'),
-                Tab(text: 'Purchase'),
-                Tab(text: 'Expense'),
+              tabs: [
+                Tab(text: loc.get('sale_tab_label')),
+                Tab(text: loc.get('purchase_tab_label')),
+                Tab(text: loc.get('expense_tab_label')),
               ],
             ),
           ),
@@ -424,8 +429,7 @@ class _BillsScreenState extends State<_BillsScreen>
                   child: TextField(
                     controller: _searchCtrl,
                     decoration: InputDecoration(
-                      hintText:
-                          'Search for ${_tabLabel(_tabs.index)} transactions',
+                      hintText: _searchHint(loc),
                       hintStyle: const TextStyle(
                           fontSize: 13, color: Color(0xFFBDBDBD)),
                       prefixIcon: const Icon(Icons.search,
@@ -500,18 +504,18 @@ class _BillsScreenState extends State<_BillsScreen>
                           borderRadius: BorderRadius.circular(30)),
                       padding: const EdgeInsets.symmetric(vertical: 13),
                     ),
-                    child: const Column(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('MORE',
-                            style: TextStyle(
+                        Text(loc.get('more_caps'),
+                            style: const TextStyle(
                               color: AppTheme.primaryColor,
                               fontWeight: FontWeight.w800,
                               fontSize: 13,
                               letterSpacing: 1,
                             )),
-                        Text('Payment & Return',
-                            style: TextStyle(
+                        Text(loc.get('payment_return_label'),
+                            style: const TextStyle(
                                 color: AppTheme.primaryColor, fontSize: 10)),
                       ],
                     ),
@@ -524,7 +528,7 @@ class _BillsScreenState extends State<_BillsScreen>
                     onPressed: () => _openAddBill(_currentBillType),
                     icon: Icon(_addBillIcon, size: 18),
                     label: Text(
-                      _addBillLabel,
+                      _addBillLabel(loc),
                       style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 14,
@@ -583,6 +587,7 @@ class _BillsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     return Container(
       color: AppTheme.primaryColor,
       padding: EdgeInsets.fromLTRB(
@@ -658,14 +663,14 @@ class _BillsHeader extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.settings_outlined,
+                      const Icon(Icons.settings_outlined,
                           color: Colors.white, size: 15),
-                      SizedBox(width: 4),
-                      Text('Settings',
+                      const SizedBox(width: 4),
+                      Text(loc.get('settings'),
                           style:
-                              TextStyle(color: Colors.white, fontSize: 12)),
+                              const TextStyle(color: Colors.white, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -680,7 +685,7 @@ class _BillsHeader extends StatelessWidget {
                   onTap: onMonthlySalesTap,
                   child: _StatBox(
                     amount: monthlySales,
-                    label: 'Monthly Sales',
+                    label: loc.get('monthly_sales_label'),
                     amountColor: const Color(0xFF4ADE80),
                     hasChevron: true,
                   ),
@@ -692,7 +697,7 @@ class _BillsHeader extends StatelessWidget {
                   onTap: onMonthlyPurchasesTap,
                   child: _StatBox(
                     amount: monthlyPurchases,
-                    label: 'Monthly Purchases',
+                    label: loc.get('monthly_purchases_label'),
                     amountColor: const Color(0xFFFCA5A5),
                     hasChevron: true,
                   ),
@@ -709,12 +714,12 @@ class _BillsHeader extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Flexible(
-                          child: Text('VIEW\nREPORTS',
-                              style: TextStyle(
+                          child: Text(loc.get('view_reports_short'),
+                              style: const TextStyle(
                                   color: AppTheme.primaryColor,
                                   fontWeight: FontWeight.w800,
                                   fontSize: 11,
@@ -722,7 +727,7 @@ class _BillsHeader extends StatelessWidget {
                                   height: 1.3),
                               textAlign: TextAlign.center),
                         ),
-                        Icon(Icons.chevron_right,
+                        const Icon(Icons.chevron_right,
                             color: AppTheme.primaryColor, size: 16),
                       ],
                     ),
@@ -752,8 +757,8 @@ class _BillsHeader extends StatelessWidget {
                             fontSize: 14,
                             color: Color(0xFF212121)),
                       ),
-                      const Text("Today's IN",
-                          style: TextStyle(
+                      Text(loc.get('todays_in'),
+                          style: const TextStyle(
                               fontSize: 11, color: Color(0xFF9E9E9E))),
                     ],
                   ),
@@ -773,8 +778,8 @@ class _BillsHeader extends StatelessWidget {
                               fontSize: 14,
                               color: Color(0xFF212121)),
                         ),
-                        const Text("Today's OUT",
-                            style: TextStyle(
+                        Text(loc.get('todays_out'),
+                            style: const TextStyle(
                                 fontSize: 11, color: Color(0xFF9E9E9E))),
                       ],
                     ),
@@ -782,15 +787,15 @@ class _BillsHeader extends StatelessWidget {
                 ),
                 GestureDetector(
                   onTap: onCashbook,
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Text('CASHBOOK',
-                          style: TextStyle(
+                      Text(loc.get('cashbook').toUpperCase(),
+                          style: const TextStyle(
                               color: AppTheme.primaryColor,
                               fontWeight: FontWeight.w800,
                               fontSize: 12,
                               letterSpacing: 0.5)),
-                      Icon(Icons.chevron_right,
+                      const Icon(Icons.chevron_right,
                           color: AppTheme.primaryColor, size: 18),
                     ],
                   ),
@@ -872,23 +877,29 @@ class _BillTile extends StatelessWidget {
     }
   }
 
-  String get _typeLabel {
+  String _typeLabel(AppLocalizations loc) {
     switch (bill.billType) {
       case BillType.sale:
-        return 'Sale Bill';
+        return loc.get('sale_bill');
       case BillType.purchase:
-        return 'Purchase Bill';
+        return loc.get('purchase_bill');
       case BillType.expense:
-        return 'Expense';
+        return loc.get('add_expense_title').contains('Expense') ||
+                loc.get('add_expense_title').isNotEmpty
+            ? loc.get('label_purchase') == 'Purchase'
+                ? 'Expense'
+                : loc.get('expense_tab_label')
+            : 'Expense';
       case BillType.saleReturn:
-        return 'Sale Return';
+        return loc.get('sale_return');
       case BillType.purchaseReturn:
-        return 'Purchase Return';
+        return loc.get('purchase_return');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     final isPaid = bill.isPaid;
     final isPartial = !isPaid && bill.paidAmount > 0;
 
@@ -896,13 +907,13 @@ class _BillTile extends StatelessWidget {
     final String statusLabel;
     if (isPaid) {
       statusColor = AppTheme.creditColor;
-      statusLabel = 'Fully Paid';
+      statusLabel = loc.get('fully_paid');
     } else if (isPartial) {
       statusColor = const Color(0xFFF97316);
-      statusLabel = 'Partial';
+      statusLabel = loc.get('partial');
     } else {
       statusColor = AppTheme.debitColor;
-      statusLabel = 'Unpaid';
+      statusLabel = loc.get('unpaid');
     }
 
     final isSaleType = bill.billType == BillType.sale ||
@@ -937,7 +948,7 @@ class _BillTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_typeLabel,
+                  Text(_typeLabel(loc),
                       style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 15,
@@ -1137,27 +1148,27 @@ class BillDetailScreen extends StatelessWidget {
   final Bill bill;
   const BillDetailScreen({super.key, required this.bill});
 
-  String get _typeLabel {
+  String _typeLabel(AppLocalizations loc) {
     switch (bill.billType) {
       case BillType.sale:
-        return 'Sale Bill';
+        return loc.get('sale_bill');
       case BillType.purchase:
-        return 'Purchase Bill';
+        return loc.get('purchase_bill');
       case BillType.expense:
-        return 'Expense';
+        return loc.get('expense_tab_label');
       case BillType.saleReturn:
-        return 'Sale Return';
+        return loc.get('sale_return');
       case BillType.purchaseReturn:
-        return 'Purchase Return';
+        return loc.get('purchase_return');
     }
   }
 
-  String get _returnLabel {
+  String _returnLabel(AppLocalizations loc) {
     switch (bill.billType) {
       case BillType.sale:
-        return 'SALE RETURN';
+        return loc.get('sale_return').toUpperCase();
       case BillType.purchase:
-        return 'PURCHASE RETURN';
+        return loc.get('purchase_return').toUpperCase();
       default:
         return '';
     }
@@ -1178,6 +1189,7 @@ class BillDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     final isPaid = bill.isPaid;
     final isPartial = !isPaid && bill.paidAmount > 0;
 
@@ -1185,13 +1197,13 @@ class BillDetailScreen extends StatelessWidget {
     final String statusLabel;
     if (isPaid) {
       statusColor = const Color(0xFF2E7D32);
-      statusLabel = 'Fully Paid';
+      statusLabel = loc.get('fully_paid');
     } else if (isPartial) {
       statusColor = const Color(0xFFF97316);
-      statusLabel = 'Partial';
+      statusLabel = loc.get('partial');
     } else {
       statusColor = const Color(0xFFB71C1C);
-      statusLabel = 'Unpaid';
+      statusLabel = loc.get('unpaid');
     }
 
     return Scaffold(
@@ -1262,7 +1274,9 @@ class BillDetailScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Created On: ${AppHelpers.formatDate(bill.createdAt)}',
+                            loc.getParams('created_on', {
+                              'date': AppHelpers.formatDate(bill.createdAt),
+                            }),
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF757575)),
                           ),
@@ -1308,8 +1322,8 @@ class BillDetailScreen extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Amount Paid',
-                            style: TextStyle(
+                        Text(loc.get('amount_paid'),
+                            style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF757575))),
                         Text(
                           '₹ ${bill.paidAmount.toStringAsFixed(0)}',
@@ -1372,7 +1386,7 @@ class BillDetailScreen extends StatelessWidget {
                           horizontal: 14, vertical: 8),
                     ),
                     child: Text(
-                      '+ $_returnLabel',
+                      '+ ${_returnLabel(loc)}',
                       style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -1510,7 +1524,7 @@ class BillDetailScreen extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: () => _openViewPdf(context),
             icon: Icon(Icons.picture_as_pdf_outlined, color: _headerColor),
-            label: Text('VIEW PDF',
+            label: Text(loc.get('view_pdf_caps'),
                 style: TextStyle(
                     color: _headerColor,
                     fontWeight: FontWeight.w700,
@@ -1587,7 +1601,17 @@ class _EmptyBills extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Sale Bill', 'Purchase Bill', 'Expense'];
+    final loc = context.l10n;
+    final titles = [
+      loc.get('no_sale_bills_yet'),
+      loc.get('no_purchase_bills_yet'),
+      loc.get('no_expenses_yet'),
+    ];
+    final itemWords = [
+      loc.get('sale_bill'),
+      loc.get('purchase_bill'),
+      loc.get('expense_tab_label'),
+    ];
     const icons = [
       Icons.receipt_long_outlined,
       Icons.shopping_cart_outlined,
@@ -1609,7 +1633,7 @@ class _EmptyBills extends StatelessWidget {
                 color: AppTheme.primaryColor.withValues(alpha: 0.35)),
           ),
           const SizedBox(height: 20),
-          Text('No ${labels[tabIndex]}s yet',
+          Text(titles[tabIndex],
               style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -1618,7 +1642,8 @@ class _EmptyBills extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Tap the button below to create your first ${labels[tabIndex].toLowerCase()}',
+              loc.getParams('tap_create_first',
+                  {'item': itemWords[tabIndex].toLowerCase()}),
               style: const TextStyle(fontSize: 13, color: Color(0xFF9E9E9E)),
               textAlign: TextAlign.center,
             ),
@@ -1635,11 +1660,12 @@ class _MoreOptionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = context.l10n;
     final options = [
-      (BillType.saleReturn, Icons.assignment_return_outlined, 'Sale Return',
-          'Customer returned goods'),
+      (BillType.saleReturn, Icons.assignment_return_outlined,
+          loc.get('sale_return'), 'Customer returned goods'),
       (BillType.purchaseReturn, Icons.keyboard_return_outlined,
-          'Purchase Return', 'Return goods to supplier'),
+          loc.get('purchase_return'), 'Return goods to supplier'),
     ];
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -4574,3 +4600,5 @@ class _ActionIcon extends StatelessWidget {
     );
   }
 }
+
+
