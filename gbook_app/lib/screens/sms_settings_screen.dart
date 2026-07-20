@@ -5,10 +5,16 @@
 //  - "GBook SMS" tab: free SMS limit card, bullet list, sample SMS preview
 // All strings now go through context.l10n so this screen re-renders in
 // whatever language is active app-wide.
+//
+// FIX: the SIM picker now reads the phone's real SIM cards (via
+// SimInfoService) and shows their actual carrier names — e.g.
+// "SIM 1 (Airtel)" — instead of a hardcoded 'SIM 1' / 'SIM 2' placeholder,
+// matching Khatabook's behaviour.
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/locale_provider.dart';
+import '../services/sim_info_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
 import '../l10n/app_localizations.dart';
@@ -23,6 +29,8 @@ class SmsSettingsScreen extends StatefulWidget {
 class _SmsSettingsScreenState extends State<SmsSettingsScreen> {
   String _smsMode = 'my_number'; // 'my_number' or 'gbook_sms'
   String _simCard = 'Default';
+  List<SimCardInfo> _simCards = [];
+  bool _simLoading = true;
   int _smsSentThisMonth = 0;
   final int _monthlyLimit = 100;
   bool _saving = false;
@@ -32,6 +40,7 @@ class _SmsSettingsScreenState extends State<SmsSettingsScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    _loadSimCards();
   }
 
   Future<void> _loadSettings() async {
@@ -42,6 +51,22 @@ class _SmsSettingsScreenState extends State<SmsSettingsScreen> {
       _simCard = prefs.getString('sim_card') ?? 'Default';
       _smsSentThisMonth = prefs.getInt('sms_sent_month') ?? 0;
       _loading = false;
+    });
+  }
+
+  Future<void> _loadSimCards() async {
+    final cards = await SimInfoService.instance.getSimCards();
+    if (!mounted) return;
+    setState(() {
+      _simCards = cards;
+      _simLoading = false;
+      // If the previously saved selection no longer matches a real SIM on
+      // this device (e.g. SIM was removed, or this is the first read),
+      // fall back to Default instead of showing a stale/invalid value.
+      final validLabels = ['Default', ..._simCards.map((c) => c.label)];
+      if (!validLabels.contains(_simCard)) {
+        _simCard = 'Default';
+      }
     });
   }
 
@@ -232,25 +257,39 @@ class _SmsSettingsScreenState extends State<SmsSettingsScreen> {
                               child: Text(t.get('select_sim'),
                                   style: const TextStyle(fontSize: 14)),
                             ),
-                            DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _simCard,
-                                items: ['Default', 'SIM 1', 'SIM 2']
-                                    .map((s) => DropdownMenuItem(
-                                        value: s,
-                                        child: Text(
-                                            s == 'Default'
-                                                ? t.get('default_text')
-                                                : s,
-                                            style: TextStyle(
-                                                color: AppTheme.primaryColor,
-                                                fontWeight:
-                                                    FontWeight.w600))))
-                                    .toList(),
-                                onChanged: (v) =>
-                                    setState(() => _simCard = v!),
+                            if (_simLoading)
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            else
+                              DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _simCard,
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: 'Default',
+                                      child: Text(t.get('default_text'),
+                                          style: TextStyle(
+                                              color: AppTheme.primaryColor,
+                                              fontWeight: FontWeight.w600)),
+                                    ),
+                                    ..._simCards.map((c) => DropdownMenuItem(
+                                          value: c.label,
+                                          child: Text(c.label,
+                                              style: TextStyle(
+                                                  color:
+                                                      AppTheme.primaryColor,
+                                                  fontWeight:
+                                                      FontWeight.w600)),
+                                        )),
+                                  ],
+                                  onChanged: (v) =>
+                                      setState(() => _simCard = v!),
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),

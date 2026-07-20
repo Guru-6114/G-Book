@@ -8,22 +8,26 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.ContactsContract;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
-import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 
 public class MainActivity extends FlutterActivity {
 
     private static final String CONTACTS_CHANNEL = "gbook/contacts";
+    private static final String SIM_INFO_CHANNEL = "com.gbook.app/sim_info";
     private static final int PICK_CONTACT_REQUEST = 1001;
     private static final int CONTACTS_PERMISSION_REQUEST = 1002;
 
@@ -44,8 +48,60 @@ public class MainActivity extends FlutterActivity {
                 result.notImplemented();
             }
         });
+
+        new MethodChannel(
+                flutterEngine.getDartExecutor().getBinaryMessenger(),
+                SIM_INFO_CHANNEL
+        ).setMethodCallHandler((call, result) -> {
+            if ("getSimCards".equals(call.method)) {
+                result.success(getSimCards());
+            } else {
+                result.notImplemented();
+            }
+        });
     }
 
+    // ── SIM info ─────────────────────────────────────────────────────────────
+    // Replaces the abandoned sim_data pub package (only supports Flutter's
+    // old v1 embedding and no longer compiles). Uses SubscriptionManager
+    // directly, same native-bridge pattern as the contacts picker below.
+    private List<Map<String, Object>> getSimCards() {
+        List<Map<String, Object>> cards = new ArrayList<>();
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return cards; // SubscriptionManager requires API 22+
+        }
+
+        boolean granted = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.READ_PHONE_STATE)
+                == PackageManager.PERMISSION_GRANTED;
+        if (!granted) {
+            return cards;
+        }
+
+        try {
+            SubscriptionManager sm = SubscriptionManager.from(this);
+            List<SubscriptionInfo> infos = sm.getActiveSubscriptionInfoList();
+            if (infos == null) return cards;
+
+            for (SubscriptionInfo info : infos) {
+                Map<String, Object> card = new HashMap<>();
+                card.put("slotIndex", info.getSimSlotIndex());
+                CharSequence carrier = info.getCarrierName();
+                CharSequence display = info.getDisplayName();
+                card.put("carrierName", carrier != null ? carrier.toString() : null);
+                card.put("displayName", display != null ? display.toString()
+                        : "SIM " + (info.getSimSlotIndex() + 1));
+                cards.add(card);
+            }
+        } catch (SecurityException e) {
+            // permission revoked between check and call — return what we have
+        }
+
+        return cards;
+    }
+
+    // ── Contact picker ──────────────────────────────────────────────────────
     private void pickContact() {
         // Check READ_CONTACTS permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)

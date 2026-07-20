@@ -806,7 +806,7 @@ class MoreScreen extends StatelessWidget {
   void _showFAQs(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const _FaqCategoriesScreen()),
+      MaterialPageRoute(builder: (_) => const FaqCategoriesScreen()),
     );
   }
 
@@ -1627,8 +1627,10 @@ final List<_FaqCategory> _kFaqCategories = [
   ),
 ];
 
-class _FaqCategoriesScreen extends StatelessWidget {
-  const _FaqCategoriesScreen();
+/// Public so other screens (e.g. PaymentSettingsScreen's "Help" row) can
+/// navigate straight into the FAQ list, matching Khatabook's behaviour.
+class FaqCategoriesScreen extends StatelessWidget {
+  const FaqCategoriesScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
