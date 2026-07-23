@@ -25,6 +25,7 @@ import 'app_lock_screen.dart';
 import 'delete_khata_screen.dart';
 import '../services/app_lock_service.dart';
 import 'manage_staff_screen.dart';
+import 'business_card_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   final void Function(int tabIndex)? onNavigateToTab;
@@ -125,11 +126,14 @@ class MoreScreen extends StatelessWidget {
           ),
 
           // ── Profile strength banner ────────────────────────────────────
+          // Tapping this now opens the Business Card templates screen
+          // (Khatabook-style: pick a template, fill in details, download)
+          // instead of going straight to the plain Profile edit screen.
           SliverToBoxAdapter(
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                MaterialPageRoute(builder: (_) => const BusinessCardScreen()),
               ),
               child: Container(
                 margin: const EdgeInsets.all(12),
@@ -1419,21 +1423,26 @@ class _StaffFeatureRow extends StatelessWidget {
 // Left in English on purpose (per the earlier localization pass) — the
 // FAQ question/answer bodies are content, not chrome, so they were kept
 // as-is rather than run through context.tr().
+//
+// NOTE: FaqItem / FaqCategory / kFaqCategories / FaqDetailScreen are public
+// (no leading underscore) so PaymentSettingsScreen can navigate directly
+// into the "Cashbook & Payments" FAQ list, matching Khatabook's behaviour of
+// opening the payment-specific FAQs instead of the full category picker.
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _FaqItem {
+class FaqItem {
   final String question;
   final String answer;
-  const _FaqItem(this.question, this.answer);
+  const FaqItem(this.question, this.answer);
 }
 
-class _FaqCategory {
+class FaqCategory {
   final IconData icon;
   final String title;
   final String subtitle;
-  final List<_FaqItem> items;
+  final List<FaqItem> items;
 
-  const _FaqCategory({
+  const FaqCategory({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -1441,185 +1450,185 @@ class _FaqCategory {
   });
 }
 
-final List<_FaqCategory> _kFaqCategories = [
-  _FaqCategory(
+final List<FaqCategory> kFaqCategories = [
+  FaqCategory(
     icon: Icons.person_add_alt_outlined,
     title: 'Managing Customers',
     subtitle: 'Add customers, transactions, send reminders etc',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I add a new customer?',
         'Go to the Parties tab → Customers → tap ADD CUSTOMER, fill in the name, phone number, email and address, then tap SAVE.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I record a payment given or received?',
         'Open the customer from the Parties list, then tap GIVEN or RECEIVED at the bottom of the screen, enter the amount, note and payment mode, and save.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I edit or delete a customer?',
         'Open the customer, tap the edit (pencil) icon in the top bar to update details, or the delete icon to remove the customer along with their transactions.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I send a payment reminder?',
         'Open the customer\'s ledger, tap the reminder/SMS icon in the quick action bar to send a WhatsApp or SMS reminder with their current balance.',
       ),
-      _FaqItem(
+      FaqItem(
         'What do "You will give" and "You will get" mean?',
         '"You will get" is the amount owed to you by customers. "You will give" is the amount you owe suppliers or customers. Both are shown as running totals on the Parties screen.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.local_shipping_outlined,
     title: 'Managing Suppliers',
     subtitle: 'Add suppliers and track what you owe',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I add a supplier?',
         'Go to Parties → Suppliers tab → tap ADD SUPPLIER and fill in their details.',
       ),
-      _FaqItem(
+      FaqItem(
         'How is supplier balance calculated?',
         'Every purchase bill or payment you record against a supplier updates their running balance automatically — no manual calculation needed.',
       ),
-      _FaqItem(
+      FaqItem(
         'Can I see total payable to all suppliers at once?',
         'Yes — the Suppliers tab shows a "Total Payable" summary card at the top, combining balances across all suppliers.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.receipt_long_outlined,
     title: 'Bills & Invoices',
     subtitle: 'Create sale, purchase and return bills',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I create a sale or purchase bill?',
         'Go to the Bills tab, choose Sale or Purchase, tap ADD BILL, add items, set payment status, and save.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I create a sale or purchase return?',
         'Open the original bill from Bill Detail, tap "+ SALE RETURN" or "+ PURCHASE RETURN", adjust the quantities being returned, choose a refund mode, and generate the return.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I share or download an invoice PDF?',
         'Open any bill → tap VIEW PDF. You can pick Premium, Thermal or Basic invoice formats, then use Download or Share on WhatsApp.',
       ),
-      _FaqItem(
+      FaqItem(
         'What does "Fully Paid / Partial / Unpaid" mean on a bill?',
         'It reflects how much of the bill amount has been paid — Fully Paid means the full amount is settled, Partial means some amount is still due, Unpaid means nothing has been paid yet.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.inventory_2_outlined,
     title: 'Items & Inventory',
     subtitle: 'Add items, prices, stock and low-stock alerts',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I add a new item?',
         'Go to the Items tab → tap ADD ITEM, enter the name, sale price, purchase price, stock quantity and unit, then save.',
       ),
-      _FaqItem(
+      FaqItem(
         'How does stock update automatically?',
         'Stock reduces automatically when you create a sale bill and increases when you create a purchase bill, so you don\'t need to update it manually.',
       ),
-      _FaqItem(
+      FaqItem(
         'What is the low-stock warning?',
         'Each item has a low-stock threshold. When available stock falls at or below that number, the item is flagged so you know to reorder.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.account_balance_wallet_outlined,
     title: 'Cashbook & Payments',
     subtitle: 'Track daily cash in / cash out',
     items: const [
-      _FaqItem(
+      FaqItem(
         'What is the Cashbook for?',
         'Cashbook records all your cash-in and cash-out entries separately from customer/supplier ledgers — useful for tracking day-to-day business cash flow.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I add a cashbook entry?',
         'Open Cashbook from the More menu or the Bills header, tap the add button, choose Cash In or Cash Out, enter the amount and description, and save.',
       ),
-      _FaqItem(
+      FaqItem(
         'Where can I set accepted payment modes?',
         'Go to More → Payment Settings to configure which payment modes (Cash, UPI, Bank Transfer, Cheque) appear when recording transactions.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.person_outline,
     title: 'My Profile & Business',
     subtitle: 'Manage your profile and business details',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I update my business name or address?',
         'Go to More → Profile (or the edit icon next to your business name), update the fields, and tap Save.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I change the app language?',
         'Go to More → Language, pick your preferred language from the list — the whole app updates immediately.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I log out of GBook?',
         'Open Profile → scroll down and tap Logout, then confirm.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.bar_chart_outlined,
     title: 'Reports',
     subtitle: 'View monthly summaries and totals',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I view my monthly report?',
         'Go to Reports (from the Parties screen or Bills header "VIEW REPORTS"), select the year and month to see total given, received and net balance.',
       ),
-      _FaqItem(
+      FaqItem(
         'What is shown in "Overall Summary"?',
         'It shows your all-time totals for amount given and amount received across every recorded transaction.',
       ),
-      _FaqItem(
+      FaqItem(
         'Can I see monthly sales and purchases separately?',
         'Yes — tap the Monthly Sales or Monthly Purchases card on the Bills screen header to open a detailed breakdown.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.lock_outline,
     title: 'App Lock & Security',
     subtitle: 'Protect your data with a PIN',
     items: const [
-      _FaqItem(
+      FaqItem(
         'How do I enable App Lock?',
         'Go to More → Settings → App Lock, turn it on and set a 4-digit PIN. The app will now ask for this PIN every time it\'s opened.',
       ),
-      _FaqItem(
+      FaqItem(
         'What if I forget my App Lock PIN?',
         'From the unlock screen, use the "Forgot PIN" option if available, or contact support via Call Us / WhatsApp for help resetting it.',
       ),
-      _FaqItem(
+      FaqItem(
         'How do I change or turn off my PIN?',
         'Go to More → Settings → App Lock, tap the row, and follow the prompts to change your PIN or turn the lock off.',
       ),
     ],
   ),
-  _FaqCategory(
+  FaqCategory(
     icon: Icons.cloud_outlined,
     title: 'Data Backup',
     subtitle: 'Know how to backup or restore your data',
     items: const [
-      _FaqItem(
+      FaqItem(
         'Is my data backed up automatically?',
         'Yes, your data is automatically backed up whenever your phone has an internet connection.',
       ),
-      _FaqItem(
+      FaqItem(
         'I got a new phone — how do I get my data back?',
         'Install GBook on the new device and log in with the same registered phone number. Your customers, bills, items and reports will be restored automatically.',
       ),
-      _FaqItem(
+      FaqItem(
         'What happens if I delete the app by mistake?',
         'Simply reinstall GBook and log in again with your registered number — all your data is safely restored from backup.',
       ),
@@ -1655,16 +1664,16 @@ class FaqCategoriesScreen extends StatelessWidget {
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: _kFaqCategories.length,
+              itemCount: kFaqCategories.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (_, i) {
-                final cat = _kFaqCategories[i];
+                final cat = kFaqCategories[i];
                 return InkWell(
                   borderRadius: BorderRadius.circular(10),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => _FaqDetailScreen(category: cat),
+                      builder: (_) => FaqDetailScreen(category: cat),
                     ),
                   ),
                   child: Container(
@@ -1782,9 +1791,9 @@ class FaqCategoriesScreen extends StatelessWidget {
   }
 }
 
-class _FaqDetailScreen extends StatelessWidget {
-  final _FaqCategory category;
-  const _FaqDetailScreen({required this.category});
+class FaqDetailScreen extends StatelessWidget {
+  final FaqCategory category;
+  const FaqDetailScreen({super.key, required this.category});
 
   @override
   Widget build(BuildContext context) {

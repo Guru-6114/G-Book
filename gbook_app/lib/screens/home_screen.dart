@@ -369,185 +369,206 @@ class _BillsScreenState extends State<_BillsScreen>
             e.date.day == today.day)
         .fold(0.0, (s, e) => s + e.amount);
 
+    // FIX (overflow on rotation): the header + tab bar + search row + bottom
+    // action bar are fixed-height widgets. In landscape the available screen
+    // height can be smaller than their combined height, which previously
+    // caused a "RenderFlex overflowed" error because the bill list sat in an
+    // Expanded that could not shrink below zero. Wrapping everything in a
+    // LayoutBuilder + SingleChildScrollView (with a ConstrainedBox that keeps
+    // the original full-height look when content fits) makes the whole
+    // screen scroll instead of overflowing when space is tight, while still
+    // looking identical to before whenever it fits.
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: AppTheme.backgroundGrey,
-      body: Column(
-        children: [
-          _BillsHeader(
-            businessName: auth.profile?.businessName ?? 'My Business',
-            businessAddress: auth.profile?.address ?? '',
-            monthlySales: billProvider.monthlySales,
-            monthlyPurchases: billProvider.monthlyPurchases,
-            todayIn: todayIn,
-            todayOut: todayOut,
-            fromMore: widget.fromMore,
-            onBackToMore: widget.onBackToMore,
-            onViewReports: widget.onGoToReports,
-            onCashbook: _openCashbook,
-            onSettings: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            ),
-            onMonthlySalesTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const SalesReportScreen(isSales: true)),
-            ),
-            onMonthlyPurchasesTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const SalesReportScreen(isSales: false)),
-            ),
-          ),
-          Container(
-            color: AppTheme.primaryColor,
-            child: TabBar(
-              controller: _tabs,
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white60,
-              labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  letterSpacing: 0.5),
-              unselectedLabelStyle: const TextStyle(fontSize: 14),
-              tabs: [
-                Tab(text: loc.get('sale_tab_label')),
-                Tab(text: loc.get('purchase_tab_label')),
-                Tab(text: loc.get('expense_tab_label')),
-              ],
-            ),
-          ),
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: _searchHint(loc),
-                      hintStyle: const TextStyle(
-                          fontSize: 13, color: Color(0xFFBDBDBD)),
-                      prefixIcon: const Icon(Icons.search,
-                          size: 20, color: Color(0xFF9E9E9E)),
-                      suffixIcon: _query.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _query = '');
-                              })
-                          : null,
-                      isDense: true,
-                      filled: true,
-                      fillColor: const Color(0xFFF5F5F5),
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
+      body: RefreshIndicator(
+        onRefresh: () => context.read<BillProvider>().loadBills(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  children: [
+                    _BillsHeader(
+                      businessName: auth.profile?.businessName ?? 'My Business',
+                      businessAddress: auth.profile?.address ?? '',
+                      monthlySales: billProvider.monthlySales,
+                      monthlyPurchases: billProvider.monthlyPurchases,
+                      todayIn: todayIn,
+                      todayOut: todayOut,
+                      fromMore: widget.fromMore,
+                      onBackToMore: widget.onBackToMore,
+                      onViewReports: widget.onGoToReports,
+                      onCashbook: _openCashbook,
+                      onSettings: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                      ),
+                      onMonthlySalesTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SalesReportScreen(isSales: true)),
+                      ),
+                      onMonthlyPurchasesTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SalesReportScreen(isSales: false)),
                       ),
                     ),
-                    onChanged: (v) => setState(() => _query = v),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _IconBtn(icon: Icons.filter_list, onTap: () {}),
-                const SizedBox(width: 6),
-                _IconBtn(icon: Icons.sort, onTap: () {}),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: billProvider.loading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredBills.isEmpty
-                    ? _EmptyBills(
-                        tabIndex: _tabs.index,
-                        onAddBill: () => _openAddBill(_currentBillType),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () =>
-                            context.read<BillProvider>().loadBills(),
-                        child: ListView.separated(
-                          padding: EdgeInsets.zero,
-                          itemCount: filteredBills.length,
-                          separatorBuilder: (_, __) =>
-                              const Divider(height: 1, indent: 70),
-                          itemBuilder: (_, i) =>
-                              _BillTile(bill: filteredBills[i]),
-                        ),
+                    Container(
+                      color: AppTheme.primaryColor,
+                      child: TabBar(
+                        controller: _tabs,
+                        indicatorColor: Colors.white,
+                        indicatorWeight: 3,
+                        labelColor: Colors.white,
+                        unselectedLabelColor: Colors.white60,
+                        labelStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            letterSpacing: 0.5),
+                        unselectedLabelStyle: const TextStyle(fontSize: 14),
+                        tabs: [
+                          Tab(text: loc.get('sale_tab_label')),
+                          Tab(text: loc.get('purchase_tab_label')),
+                          Tab(text: loc.get('expense_tab_label')),
+                        ],
                       ),
-          ),
-          Container(
-            color: Colors.white,
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 10,
-              bottom: MediaQuery.of(context).padding.bottom + 10,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _openMoreOptions,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(
-                          color: AppTheme.primaryColor, width: 1.5),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(loc.get('more_caps'),
-                            style: const TextStyle(
-                              color: AppTheme.primaryColor,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                              letterSpacing: 1,
-                            )),
-                        Text(loc.get('payment_return_label'),
-                            style: const TextStyle(
-                                color: AppTheme.primaryColor, fontSize: 10)),
-                      ],
+                    Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchCtrl,
+                              decoration: InputDecoration(
+                                hintText: _searchHint(loc),
+                                hintStyle: const TextStyle(
+                                    fontSize: 13, color: Color(0xFFBDBDBD)),
+                                prefixIcon: const Icon(Icons.search,
+                                    size: 20, color: Color(0xFF9E9E9E)),
+                                suffixIcon: _query.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.close, size: 18),
+                                        onPressed: () {
+                                          _searchCtrl.clear();
+                                          setState(() => _query = '');
+                                        })
+                                    : null,
+                                isDense: true,
+                                filled: true,
+                                fillColor: const Color(0xFFF5F5F5),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 10),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              onChanged: (v) => setState(() => _query = v),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _IconBtn(icon: Icons.filter_list, onTap: () {}),
+                          const SizedBox(width: 6),
+                          _IconBtn(icon: Icons.sort, onTap: () {}),
+                        ],
+                      ),
                     ),
-                  ),
+                    const Divider(height: 1),
+                    billProvider.loading
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 40),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : filteredBills.isEmpty
+                            ? _EmptyBills(
+                                tabIndex: _tabs.index,
+                                onAddBill: () => _openAddBill(_currentBillType),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                padding: EdgeInsets.zero,
+                                itemCount: filteredBills.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1, indent: 70),
+                                itemBuilder: (_, i) =>
+                                    _BillTile(bill: filteredBills[i]),
+                              ),
+                    Container(
+                      color: Colors.white,
+                      padding: EdgeInsets.only(
+                        left: 16,
+                        right: 16,
+                        top: 10,
+                        bottom: MediaQuery.of(context).padding.bottom + 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _openMoreOptions,
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                    color: AppTheme.primaryColor, width: 1.5),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30)),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(loc.get('more_caps'),
+                                      style: const TextStyle(
+                                        color: AppTheme.primaryColor,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13,
+                                        letterSpacing: 1,
+                                      )),
+                                  Text(loc.get('payment_return_label'),
+                                      style: const TextStyle(
+                                          color: AppTheme.primaryColor, fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _openAddBill(_currentBillType),
+                              icon: Icon(_addBillIcon, size: 18),
+                              label: Text(
+                                _addBillLabel(loc),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    letterSpacing: 1),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30)),
+                                elevation: 2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openAddBill(_currentBillType),
-                    icon: Icon(_addBillIcon, size: 18),
-                    label: Text(
-                      _addBillLabel(loc),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          letterSpacing: 1),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
-                      elevation: 2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -622,6 +643,8 @@ class _BillsHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // FIX: removed the pencil (edit) icon that was shown
+                    // next to the business name on this header.
                     Row(
                       children: [
                         Flexible(
@@ -632,9 +655,6 @@ class _BillsHeader extends StatelessWidget {
                                   fontSize: 15),
                               overflow: TextOverflow.ellipsis),
                         ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.edit,
-                            color: Colors.white70, size: 13),
                       ],
                     ),
                     if (businessAddress.isNotEmpty)
@@ -3865,7 +3885,7 @@ class _BillPdfScreenState extends State<BillPdfScreen> {
                       )
                     : _ActionIcon(
                         icon: Icons.chat_outlined,
-                        label: 'Share on\nWhatsApp',
+                        label: 'Share on\nWhatsapp',
                         color: const Color(0xFF25D366),
                         iconColor: const Color(0xFF25D366),
                         onTap: () => _shareOnWhatsApp(profile),
@@ -4445,7 +4465,7 @@ class _ThemePickerSheet extends StatelessWidget {
             children: _kThemeColors.map((theme) {
               final color = theme['color'] as Color;
               final name = theme['name'] as String;
-              final isSelected = currentColor.value == color.value;
+              final isSelected = currentColor.toARGB32() == color.toARGB32();
               return GestureDetector(
                 onTap: () => onColorSelected(color),
                 child: Column(
@@ -4600,5 +4620,3 @@ class _ActionIcon extends StatelessWidget {
     );
   }
 }
-
-

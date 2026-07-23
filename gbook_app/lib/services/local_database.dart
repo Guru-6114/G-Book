@@ -24,9 +24,11 @@ class LocalDatabase {
 
   static Database? _db;
 
-  // Bumped to 7: adds `staff` and `staff_attendance` tables for the Staff
-  // Management feature (add staff, permissions, daily attendance, salary due).
-  static const int _dbVersion = 7;
+  // Bumped to 8: adds `businessType` and `staffCount` columns to
+  // `business_profile` for the Book Profile screen (business type picker
+  // and staff-count sheet now persist through the DB/backend instead of
+  // SharedPreferences).
+  static const int _dbVersion = 8;
 
   Future<Database> get database async {
     _db ??= await _initDb();
@@ -63,7 +65,9 @@ class LocalDatabase {
         category TEXT,
         createdAt TEXT NOT NULL,
         isActive INTEGER NOT NULL DEFAULT 0,
-        deletedAt TEXT
+        deletedAt TEXT,
+        businessType TEXT,
+        staffCount TEXT
       )
     ''');
 
@@ -191,7 +195,7 @@ class LocalDatabase {
       )
     ''');
 
-    // ── Staff (NEW) ──────────────────────────────────────────────────────────
+    // ── Staff ────────────────────────────────────────────────────────────────
     await db.execute('''
       CREATE TABLE staff (
         id TEXT PRIMARY KEY,
@@ -273,7 +277,7 @@ class LocalDatabase {
           db, 'ALTER TABLE business_profile ADD COLUMN deletedAt TEXT');
     }
 
-    // v6 → v7 (NEW): create `staff` and `staff_attendance` tables for the
+    // v6 → v7: create `staff` and `staff_attendance` tables for the
     // Staff Management feature.
     if (oldVersion < 7) {
       await db.execute('''
@@ -301,6 +305,15 @@ class LocalDatabase {
           FOREIGN KEY (staffId) REFERENCES staff(id)
         )
       ''');
+    }
+
+    // v7 → v8 (NEW): add `businessType` and `staffCount` to
+    // `business_profile` for the Book Profile screen.
+    if (oldVersion < 8) {
+      await _safeAlter(
+          db, 'ALTER TABLE business_profile ADD COLUMN businessType TEXT');
+      await _safeAlter(
+          db, 'ALTER TABLE business_profile ADD COLUMN staffCount TEXT');
     }
   }
 
@@ -355,6 +368,14 @@ class LocalDatabase {
       await _safeAlter(
           db, 'ALTER TABLE business_profile ADD COLUMN deletedAt TEXT');
     }
+    if (!bpCols.contains('businessType')) {
+      await _safeAlter(
+          db, 'ALTER TABLE business_profile ADD COLUMN businessType TEXT');
+    }
+    if (!bpCols.contains('staffCount')) {
+      await _safeAlter(
+          db, 'ALTER TABLE business_profile ADD COLUMN staffCount TEXT');
+    }
 
     for (final table in [
       'customers',
@@ -397,7 +418,7 @@ class LocalDatabase {
       await _safeAlter(db, 'ALTER TABLE bills ADD COLUMN deletedAt TEXT');
     }
 
-    // ── Staff (NEW) — create tables if a prior failed/skipped upgrade left
+    // ── Staff — create tables if a prior failed/skipped upgrade left
     // them missing even though user_version says otherwise.
     if (!await _tableExists(db, 'staff')) {
       await db.execute('''
@@ -924,7 +945,7 @@ class LocalDatabase {
     await db.delete('cashbook_entries', where: 'id = ?', whereArgs: [id]);
   }
 
-  // ── Staff (NEW) ─────────────────────────────────────────────────────────
+  // ── Staff ─────────────────────────────────────────────────────────────────
 
   Future<List<Staff>> getStaff(String bookId) async {
     final db = await database;
@@ -958,7 +979,7 @@ class LocalDatabase {
     });
   }
 
-  // ── Staff Attendance (NEW) ───────────────────────────────────────────────
+  // ── Staff Attendance ─────────────────────────────────────────────────────
 
   Future<List<StaffAttendance>> getAttendanceForStaff(String staffId) async {
     final db = await database;

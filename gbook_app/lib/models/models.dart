@@ -30,6 +30,8 @@ class BusinessProfile {
   final String? category;
   final DateTime createdAt;
   final bool isActive;
+  final String? businessType;
+  final String? staffCount;
 
   const BusinessProfile({
     required this.id,
@@ -42,6 +44,8 @@ class BusinessProfile {
     this.category,
     required this.createdAt,
     this.isActive = false,
+    this.businessType,
+    this.staffCount,
   });
 
   String get name => ownerName;
@@ -57,6 +61,8 @@ class BusinessProfile {
     String? category,
     DateTime? createdAt,
     bool? isActive,
+    String? businessType,
+    String? staffCount,
   }) {
     return BusinessProfile(
       id: id ?? this.id,
@@ -69,6 +75,8 @@ class BusinessProfile {
       category: category ?? this.category,
       createdAt: createdAt ?? this.createdAt,
       isActive: isActive ?? this.isActive,
+      businessType: businessType ?? this.businessType,
+      staffCount: staffCount ?? this.staffCount,
     );
   }
 
@@ -83,6 +91,8 @@ class BusinessProfile {
         'category': category,
         'createdAt': createdAt.toIso8601String(),
         'isActive': isActive ? 1 : 0,
+        'businessType': businessType,
+        'staffCount': staffCount,
       };
 
   Map<String, dynamic> toJson() => toMap();
@@ -99,13 +109,14 @@ class BusinessProfile {
       category: map['category'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
       isActive: ((map['isActive'] as int?) ?? 0) == 1,
+      businessType: map['businessType'] as String?,
+      staffCount: map['staffCount'] as String?,
     );
   }
 
   factory BusinessProfile.fromJson(Map<String, dynamic> json) =>
       BusinessProfile.fromMap(json);
 }
-
 // ── Customer ──────────────────────────────────────────────────────────────────
 class Customer {
   final String id;

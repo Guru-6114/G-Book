@@ -405,14 +405,7 @@ class _PartiesScreenState extends State<PartiesScreen>
             ),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined,
-                color: Colors.white, size: 20),
-            onPressed: () => _showEditBusinessSheet(context),
-            tooltip: loc.tr('edit_business'),
-          ),
-        ],
+        // ── Pencil/edit icon removed from top right corner ────────────────
         bottom: TabBar(
           controller: _tabs,
           indicatorColor: Colors.white,
@@ -677,144 +670,174 @@ class _CustomersTabState extends State<_CustomersTab> {
       return true;
     }).toList();
 
+    // ── FIX (landscape overflow): header + list/empty-state are now inside
+    // a single scrollable area wrapped in Expanded. If the fixed header
+    // content (summary cards, search bar, filter chips) plus the list don't
+    // fit the available height (e.g. landscape orientation), the content
+    // scrolls instead of overflowing. The bottom "ADD CUSTOMER" bar stays
+    // pinned outside the scrollable area, unaffected.
     return Column(
       children: [
-        // Summary cards
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryCard(
-                      label: loc.tr('you_will_give'),
-                      amount: provider.totalPayable,
-                      color: const Color(0xFF00796B),
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 50,
-                    color: const Color(0xFFE0E0E0),
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  Expanded(
-                    child: _SummaryCard(
-                      label: loc.tr('you_will_get'),
-                      amount: provider.totalReceivable,
-                      color: const Color(0xFFB71C1C),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _OutlineButton(
-                icon: Icons.picture_as_pdf_outlined,
-                label: loc.tr('view_reports'),
-                color: const Color(0xFF1565C0),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-       Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      decoration: InputDecoration(
-                        hintText: loc.tr('search_customer_hint'),
-                        hintStyle: const TextStyle(
-                            fontSize: 13, color: Color(0xFFBDBDBD)),
-                        prefixIcon: const Icon(Icons.search,
-                            size: 20, color: Color(0xFF9E9E9E)),
-                        suffixIcon: _query.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: () {
-                                  _searchCtrl.clear();
-                                  setState(() => _query = '');
-                                })
-                            : null,
-                        isDense: true,
-                        filled: true,
-                        fillColor: const Color(0xFFF5F5F5),
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      onChanged: (v) => setState(() => _query = v),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _CashbookButton(onTap: _openCashbook, label: loc.tr('cashbook')),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                        label: loc.tr('filter_all'),
-                        selected: _filter == 'all',
-                        onTap: () => setState(() => _filter = 'all')),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                        label: loc.tr('to_get_filter'),
-                        selected: _filter == 'toGet',
-                        onTap: () => setState(() => _filter = 'toGet')),
-                    const SizedBox(width: 8),
-                    _FilterChip(
-                        label: loc.tr('to_give_filter'),
-                        selected: _filter == 'toGive',
-                        onTap: () => setState(() => _filter = 'toGive')),
-                    const SizedBox(width: 16),
-                    Text(
-                      '${customers.length} ${customers.length == 1 ? loc.tr('party_singular') : loc.tr('party_plural')}',
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF9E9E9E)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const Divider(height: 1),
-
         Expanded(
-          child: provider.loading
-              ? const Center(child: CircularProgressIndicator())
-              : customers.isEmpty
-                  ? _CustomerEmptyState(loc: loc)
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          context.read<CustomerProvider>().loadCustomers(),
-                      child: ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: customers.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(height: 1, indent: 68),
-                        itemBuilder: (_, i) =>
-                            _CustomerTile(customer: customers[i], loc: loc),
-                      ),
+          child: RefreshIndicator(
+            onRefresh: () =>
+                context.read<CustomerProvider>().loadCustomers(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  // Summary cards
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SummaryCard(
+                                label: loc.tr('you_will_give'),
+                                amount: provider.totalPayable,
+                                color: const Color(0xFF00796B),
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 50,
+                              color: const Color(0xFFE0E0E0),
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                            Expanded(
+                              child: _SummaryCard(
+                                label: loc.tr('you_will_get'),
+                                amount: provider.totalReceivable,
+                                color: const Color(0xFFB71C1C),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _OutlineButton(
+                          icon: Icons.picture_as_pdf_outlined,
+                          label: loc.tr('view_reports'),
+                          color: const Color(0xFF1565C0),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const ReportsScreen()),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _searchCtrl,
+                                decoration: InputDecoration(
+                                  hintText: loc.tr('search_customer_hint'),
+                                  hintStyle: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFFBDBDBD)),
+                                  prefixIcon: const Icon(Icons.search,
+                                      size: 20, color: Color(0xFF9E9E9E)),
+                                  suffixIcon: _query.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.close,
+                                              size: 18),
+                                          onPressed: () {
+                                            _searchCtrl.clear();
+                                            setState(() => _query = '');
+                                          })
+                                      : null,
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: const Color(0xFFF5F5F5),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 10),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (v) =>
+                                    setState(() => _query = v),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _CashbookButton(
+                                onTap: _openCashbook,
+                                label: loc.tr('cashbook')),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _FilterChip(
+                                  label: loc.tr('filter_all'),
+                                  selected: _filter == 'all',
+                                  onTap: () =>
+                                      setState(() => _filter = 'all')),
+                              const SizedBox(width: 8),
+                              _FilterChip(
+                                  label: loc.tr('to_get_filter'),
+                                  selected: _filter == 'toGet',
+                                  onTap: () =>
+                                      setState(() => _filter = 'toGet')),
+                              const SizedBox(width: 8),
+                              _FilterChip(
+                                  label: loc.tr('to_give_filter'),
+                                  selected: _filter == 'toGive',
+                                  onTap: () =>
+                                      setState(() => _filter = 'toGive')),
+                              const SizedBox(width: 16),
+                              Text(
+                                '${customers.length} ${customers.length == 1 ? loc.tr('party_singular') : loc.tr('party_plural')}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Color(0xFF9E9E9E)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Divider(height: 1),
+
+                  if (provider.loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 60),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (customers.isEmpty)
+                    _CustomerEmptyState(loc: loc)
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: customers.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 68),
+                      itemBuilder: (_, i) =>
+                          _CustomerTile(customer: customers[i], loc: loc),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
 
         // Bottom ADD CUSTOMER bar
@@ -900,107 +923,129 @@ class _SuppliersTabState extends State<_SuppliersTab> {
     final totalToGive =
         toGive.fold(0.0, (sum, s) => sum + s.balance.abs());
 
+    // ── FIX (landscape overflow): same approach as Customers tab — header
+    // and list/empty-state now live inside a scrollable area wrapped in
+    // Expanded, so short/landscape viewports scroll instead of overflowing.
+    // The bottom "ADD SUPPLIER" bar stays pinned outside the scroll area.
     return Column(
       children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () =>
+                context.read<SupplierProvider>().loadSuppliers(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _SummaryCard(
-                      label: loc.tr('you_will_give'),
-                      amount: totalToGive,
-                      color: const Color(0xFF00796B),
-                    ),
-                  ),
                   Container(
-                    width: 1,
-                    height: 50,
-                    color: const Color(0xFFE0E0E0),
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  Expanded(
-                    child: _SummaryCard(
-                      label: loc.tr('you_will_get'),
-                      amount: totalToGet,
-                      color: const Color(0xFFB71C1C),
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SummaryCard(
+                                label: loc.tr('you_will_give'),
+                                amount: totalToGive,
+                                color: const Color(0xFF00796B),
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 50,
+                              color: const Color(0xFFE0E0E0),
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                            Expanded(
+                              child: _SummaryCard(
+                                label: loc.tr('you_will_get'),
+                                amount: totalToGet,
+                                color: const Color(0xFFB71C1C),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _OutlineButton(
+                          icon: Icons.picture_as_pdf_outlined,
+                          label: loc.tr('view_reports'),
+                          color: const Color(0xFF1565C0),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const ReportsScreen()),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+
+                  Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchCtrl,
+                            decoration: InputDecoration(
+                              hintText: loc.tr('search_supplier_hint'),
+                              prefixIcon: const Icon(Icons.search,
+                                  size: 20, color: Color(0xFF9E9E9E)),
+                              suffixIcon: _query.isNotEmpty
+                                  ? IconButton(
+                                      icon:
+                                          const Icon(Icons.close, size: 18),
+                                      onPressed: () {
+                                        _searchCtrl.clear();
+                                        setState(() => _query = '');
+                                      })
+                                  : null,
+                              isDense: true,
+                              filled: true,
+                              fillColor: const Color(0xFFF5F5F5),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            onChanged: (v) => setState(() => _query = v),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _CashbookButton(
+                            onTap: _openCashbook, label: loc.tr('cashbook')),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  if (provider.loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 60),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (suppliers.isEmpty)
+                    _SupplierEmptyState(loc: loc)
+                  else
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: suppliers.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 68),
+                      itemBuilder: (_, i) =>
+                          _SupplierTile(supplier: suppliers[i], loc: loc),
+                    ),
                 ],
               ),
-              const SizedBox(height: 10),
-              _OutlineButton(
-                icon: Icons.picture_as_pdf_outlined,
-                label: loc.tr('view_reports'),
-                color: const Color(0xFF1565C0),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ReportsScreen()),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    hintText: loc.tr('search_supplier_hint'),
-                    prefixIcon: const Icon(Icons.search,
-                        size: 20, color: Color(0xFF9E9E9E)),
-                    suffixIcon: _query.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _query = '');
-                            })
-                        : null,
-                    isDense: true,
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onChanged: (v) => setState(() => _query = v),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _CashbookButton(onTap: _openCashbook, label: loc.tr('cashbook')),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-
-        Expanded(
-          child: provider.loading
-              ? const Center(child: CircularProgressIndicator())
-              : suppliers.isEmpty
-                  ? _SupplierEmptyState(loc: loc)
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          context.read<SupplierProvider>().loadSuppliers(),
-                      child: ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: suppliers.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(height: 1, indent: 68),
-                        itemBuilder: (_, i) =>
-                            _SupplierTile(supplier: suppliers[i], loc: loc),
-                      ),
-                    ),
         ),
 
         // Bottom ADD SUPPLIER bar
@@ -2542,7 +2587,8 @@ class _CustomerEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 30),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2589,7 +2635,8 @@ class _SupplierEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 30),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

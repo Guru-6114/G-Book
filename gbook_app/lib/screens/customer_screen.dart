@@ -1222,7 +1222,7 @@ class _AddTransactionSheetState extends State<_AddTransactionSheet> {
   final _noteCtrl = TextEditingController();
   String _paymentMode = 'cash';
   final _date = DateTime.now();
-  // FIX (double-entry, sheet-level guard): prevents the Save button from
+   // FIX (double-entry, sheet-level guard): prevents the Save button from
   // running its logic twice if it's tapped rapidly before the widget tree
   // rebuilds with the button disabled.
   bool _submitted = false;
