@@ -640,6 +640,26 @@ class _CustomersTabState extends State<_CustomersTab> {
   String _query = '';
   String _filter = 'all';
 
+  // ── BOOK SCOPING FIX: tracks which khatabook's customers are currently
+  // loaded. Without this, switching khatabooks (or a rebuild while a
+  // different book becomes active) kept showing whatever customers were
+  // loaded for the previously active book.
+  String? _loadedForBookId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadForActiveBook();
+    });
+  }
+
+  Future<void> _loadForActiveBook() async {
+    final bookId = context.read<AuthProvider>().activeBookId;
+    _loadedForBookId = bookId;
+    await context.read<CustomerProvider>().loadCustomers(bookId: bookId);
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -655,6 +675,18 @@ class _CustomersTabState extends State<_CustomersTab> {
 
   @override
   Widget build(BuildContext context) {
+    // ── BOOK SCOPING FIX: re-checked on every rebuild. If the active
+    // khatabook changed underneath this tab (e.g. switched via the switcher
+    // sheet while this widget stayed mounted, or the widget tree rebuilt
+    // after an app resume with a different book active), reload
+    // immediately instead of continuing to show stale data.
+    final activeBookId = context.watch<AuthProvider>().activeBookId;
+    if (_loadedForBookId != activeBookId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadForActiveBook();
+      });
+    }
+
     final loc = context.watch<LocaleProvider>();
     final provider = context.watch<CustomerProvider>();
     final allCustomers = provider.customers
@@ -680,8 +712,9 @@ class _CustomersTabState extends State<_CustomersTab> {
       children: [
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () =>
-                context.read<CustomerProvider>().loadCustomers(),
+            onRefresh: () => context
+                .read<CustomerProvider>()
+                .loadCustomers(bookId: activeBookId),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
@@ -893,6 +926,27 @@ class _SuppliersTabState extends State<_SuppliersTab> {
   final _searchCtrl = TextEditingController();
   String _query = '';
 
+  // ── BOOK SCOPING FIX: this tab previously had NO scoping at all — it
+  // called loadSuppliers() with no bookId, which local_database.dart
+  // treats as "no filter, show suppliers from every khatabook combined".
+  // That is the actual root cause of Stationary showing Multi level's
+  // suppliers/customers after switching. Mirrors _CustomersTabState.
+  String? _loadedForBookId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadForActiveBook();
+    });
+  }
+
+  Future<void> _loadForActiveBook() async {
+    final bookId = context.read<AuthProvider>().activeBookId;
+    _loadedForBookId = bookId;
+    await context.read<SupplierProvider>().loadSuppliers(bookId: bookId);
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -908,6 +962,15 @@ class _SuppliersTabState extends State<_SuppliersTab> {
 
   @override
   Widget build(BuildContext context) {
+    // ── BOOK SCOPING FIX: re-checked on every rebuild, same pattern as
+    // _CustomersTabState above.
+    final activeBookId = context.watch<AuthProvider>().activeBookId;
+    if (_loadedForBookId != activeBookId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadForActiveBook();
+      });
+    }
+
     final loc = context.watch<LocaleProvider>();
     final provider = context.watch<SupplierProvider>();
     final suppliers = provider.suppliers
@@ -931,8 +994,9 @@ class _SuppliersTabState extends State<_SuppliersTab> {
       children: [
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () =>
-                context.read<SupplierProvider>().loadSuppliers(),
+            onRefresh: () => context
+                .read<SupplierProvider>()
+                .loadSuppliers(bookId: activeBookId),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(

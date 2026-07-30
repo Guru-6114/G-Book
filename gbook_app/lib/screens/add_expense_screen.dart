@@ -59,7 +59,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   Future<void> _loadExpenseNo() async {
     final provider = context.read<BillProvider>();
-    final no = await provider.nextBillNumber(BillType.expense);
+    // ── BOOK SCOPING FIX: the expense number sequence must be computed
+    // against the currently active khatabook only, otherwise "Expense #N"
+    // would keep incrementing across every book combined.
+    final bookId = context.read<AuthProvider>().activeBookId;
+    final no = await provider.nextBillNumber(BillType.expense, bookId: bookId);
     if (mounted) setState(() => _expenseNo = no);
   }
 
@@ -144,6 +148,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     setState(() => _saving = true);
     try {
       final billsProvider = context.read<BillProvider>();
+
+      // ── BOOK SCOPING FIX: every expense (stored as a Bill of type
+      // expense) must belong to the khatabook that is active right now.
+      // Without this, expenses were created with an empty bookId and
+      // leaked into whichever khatabook you opened next.
+      final bookId = context.read<AuthProvider>().activeBookId;
+
       final paid = _fullyPaid ? amount : (double.tryParse(_paidCtrl.text) ?? 0);
       final now = DateTime.now();
       final billId = AppHelpers.generateId();
@@ -162,6 +173,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         notes: _notesCtrl.text.trim().isEmpty
             ? (_category != null ? 'Category: $_category' : null)
             : _notesCtrl.text.trim(),
+        bookId: bookId,
       );
 
       await billsProvider.addBill(bill);

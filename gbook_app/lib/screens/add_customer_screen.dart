@@ -173,6 +173,11 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
     setState(() => _saving = true);
 
     final provider = context.read<CustomerProvider>();
+    // ── BOOK SCOPING FIX: every customer must belong to the khatabook that
+    // is active right now. Without this, customers were saved with an
+    // empty bookId and ended up visible in every khatabook regardless of
+    // which one was selected when they were created.
+    final activeBookId = context.read<AuthProvider>().activeBookId;
 
     try {
       if (_isEdit) {
@@ -187,6 +192,12 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
           address: _addressCtrl.text.trim().isEmpty
               ? null
               : _addressCtrl.text.trim(),
+          // Self-heal: if this customer predates book-scoping (bookId ==
+          // ''), stamp it with the book it's currently being edited from.
+          // If it already belongs to a book, leave it alone.
+          bookId: widget.customer!.bookId.isNotEmpty
+              ? widget.customer!.bookId
+              : activeBookId,
         );
         await provider.updateCustomer(updated);
       } else {
@@ -203,6 +214,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
               ? null
               : _addressCtrl.text.trim(),
           createdAt: DateTime.now(),
+          bookId: activeBookId,
         );
         await provider.addCustomer(customer);
       }

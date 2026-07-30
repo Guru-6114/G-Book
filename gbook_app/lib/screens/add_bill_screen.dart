@@ -57,7 +57,17 @@ class _AddBillScreenState extends State<AddBillScreen> {
     try {
       final billsProvider = context.read<BillProvider>();
       final itemsProvider = context.read<ItemProvider>();
-      final billNo = await billsProvider.nextBillNumber(widget.billType);
+
+      // ── BOOK SCOPING FIX: every bill must belong to the khatabook that is
+      // active right now. Without this, bills were created with an empty
+      // bookId (or the number sequence and rows were pulled across every
+      // book combined) and leaked into whichever khatabook you opened next.
+      final bookId = context.read<AuthProvider>().activeBookId;
+
+      final billNo = await billsProvider.nextBillNumber(
+        widget.billType,
+        bookId: bookId,
+      );
 
       final paid =
           _fullyPaid ? _totalAmount : double.tryParse(_paidCtrl.text) ?? 0;
@@ -95,6 +105,7 @@ class _AddBillScreenState extends State<AddBillScreen> {
         date: _date,
         createdAt: now,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        bookId: bookId,
       );
 
       await billsProvider.addBill(bill);
@@ -545,18 +556,6 @@ class _ItemRowWidget extends StatefulWidget {
 }
 
 class _ItemRowWidgetState extends State<_ItemRowWidget> {
-  // FIX (ANR / freeze): this row used to call `ctrl.addListener(...)`
-  // inside `fieldViewBuilder`, which Flutter invokes on every rebuild.
-  // Since the listener was never removed, every keystroke piled another
-  // listener on top of the same controller — after typing a few
-  // characters, a single keystroke could fire dozens of stacked
-  // listeners (each one triggering another setState/rebuild), which is
-  // what froze the UI thread and produced the "isn't responding" dialog.
-  // Fix: seed the field's text exactly once, and use TextFormField's
-  // `onChanged` callback (which simply gets replaced each build, never
-  // stacked) instead of attaching a controller listener.
-  bool _nameFieldInitialized = false;
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -593,10 +592,11 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                   },
                   fieldViewBuilder:
                       (context, ctrl, focusNode, onSubmit) {
-                    if (!_nameFieldInitialized) {
-                      ctrl.text = widget.row.nameCtrl.text;
-                      _nameFieldInitialized = true;
-                    }
+                    ctrl.text = widget.row.nameCtrl.text;
+                    ctrl.addListener(() {
+                      widget.row.nameCtrl.text = ctrl.text;
+                      widget.onChanged();
+                    });
                     return TextFormField(
                       controller: ctrl,
                       focusNode: focusNode,
@@ -605,10 +605,6 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                           (v == null || v.trim().isEmpty)
                               ? 'Required'
                               : null,
-                      onChanged: (v) {
-                        widget.row.nameCtrl.text = v;
-                        widget.onChanged();
-                      },
                       decoration: const InputDecoration(
                         hintText: 'Item name',
                         contentPadding: EdgeInsets.symmetric(
@@ -630,9 +626,17 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
             ],
           ),
           const SizedBox(height: 8),
+          // FIX: Qty / Unit / Price row was overflowing on the right by a
+          // few pixels because the unit dropdown used a fixed SizedBox
+          // width (80) that didn't leave enough room next to Qty and
+          // Price on narrower screens. Switching all three to Expanded
+          // (with proportional flex) lets them share the available width
+          // instead of overflowing, and trimming the dropdown's internal
+          // padding/icon gives a bit more breathing room too.
           Row(
             children: [
               Expanded(
+                flex: 3,
                 child: TextFormField(
                   controller: widget.row.qtyCtrl,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -649,14 +653,16 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
                 ),
               ),
               const SizedBox(width: 6),
-              SizedBox(
-                width: 80,
+              Expanded(
+                flex: 3,
                 child: DropdownButtonFormField<String>(
                   initialValue: widget.row.unit,
                   isDense: true,
+                  isExpanded: true,
+                  icon: const Icon(Icons.arrow_drop_down, size: 18),
                   decoration: const InputDecoration(
                     contentPadding: EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 8),
+                        horizontal: 6, vertical: 8),
                     isDense: true,
                   ),
                   items: ['PCS', 'KGS', 'LTR', 'MTR', 'BOX', 'PKT']
@@ -673,6 +679,7 @@ class _ItemRowWidgetState extends State<_ItemRowWidget> {
               ),
               const SizedBox(width: 6),
               Expanded(
+                flex: 4,
                 child: TextFormField(
                   controller: widget.row.priceCtrl,
                   keyboardType: const TextInputType.numberWithOptions(

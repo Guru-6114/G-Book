@@ -151,6 +151,14 @@ class _BillsScreenState extends State<_BillsScreen>
   final _searchCtrl = TextEditingController();
   String _query = '';
 
+  // ── BOOK SCOPING FIX: tracks which khatabook's bills/cashbook entries are
+  // currently loaded. Previously this screen loaded bills/cashbook entries
+  // with no bookId at all (which the data layer treats as "no filter — show
+  // everything from every book combined"), and never re-checked whether the
+  // active khatabook had changed while this screen stayed mounted. Mirrors
+  // the pattern already applied to parties_screen.dart's tabs.
+  String? _loadedForBookId;
+
   @override
   void initState() {
     super.initState();
@@ -161,10 +169,15 @@ class _BillsScreenState extends State<_BillsScreen>
     );
     _tabs.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<BillProvider>().loadBills();
-      context.read<CashbookProvider>().loadEntries();
+      if (mounted) _loadForActiveBook();
     });
+  }
+
+  Future<void> _loadForActiveBook() async {
+    final bookId = context.read<AuthProvider>().activeBookId;
+    _loadedForBookId = bookId;
+    await context.read<BillProvider>().loadBills(bookId: bookId);
+    await context.read<CashbookProvider>().loadEntries(bookId: bookId);
   }
 
   @override
@@ -233,7 +246,9 @@ class _BillsScreenState extends State<_BillsScreen>
       );
     }
     if (result == true && mounted) {
-      context.read<BillProvider>().loadBills();
+      // ── BOOK SCOPING FIX: reload scoped to the active book, not global.
+      final bookId = context.read<AuthProvider>().activeBookId;
+      context.read<BillProvider>().loadBills(bookId: bookId);
     }
   }
 
@@ -292,7 +307,9 @@ class _BillsScreenState extends State<_BillsScreen>
     );
 
     if (result == true && mounted) {
-      context.read<BillProvider>().loadBills();
+      // ── BOOK SCOPING FIX: reload scoped to the active book.
+      final bookId = context.read<AuthProvider>().activeBookId;
+      context.read<BillProvider>().loadBills(bookId: bookId);
     }
   }
 
@@ -331,6 +348,19 @@ class _BillsScreenState extends State<_BillsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ── BOOK SCOPING FIX: re-checked on every rebuild. If the active
+    // khatabook changed underneath this screen (switched via the switcher
+    // sheet on the Parties tab while this screen stayed mounted in the
+    // IndexedStack, or the widget tree rebuilt after an app resume with a
+    // different book active), reload immediately instead of continuing to
+    // show stale/combined data.
+    final activeBookId = context.watch<AuthProvider>().activeBookId;
+    if (_loadedForBookId != activeBookId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadForActiveBook();
+      });
+    }
+
     final loc = context.l10n;
     final billProvider = context.watch<BillProvider>();
     final cashbook = context.watch<CashbookProvider>();
@@ -382,7 +412,11 @@ class _BillsScreenState extends State<_BillsScreen>
       resizeToAvoidBottomInset: false,
       backgroundColor: AppTheme.backgroundGrey,
       body: RefreshIndicator(
-        onRefresh: () => context.read<BillProvider>().loadBills(),
+        // ── BOOK SCOPING FIX: pull-to-refresh must reload scoped to the
+        // active book, not every book combined.
+        onRefresh: () => context
+            .read<BillProvider>()
+            .loadBills(bookId: context.read<AuthProvider>().activeBookId),
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -1576,7 +1610,9 @@ class BillDetailScreen extends StatelessWidget {
       ),
     );
     if (result == true && context.mounted) {
-      context.read<BillProvider>().loadBills();
+      // ── BOOK SCOPING FIX: reload scoped to the active book.
+      final bookId = context.read<AuthProvider>().activeBookId;
+      context.read<BillProvider>().loadBills(bookId: bookId);
     }
   }
 
@@ -1897,8 +1933,17 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
     setState(() => _saving = true);
     try {
       final billsProvider = context.read<BillProvider>();
-      final billNo =
-          await billsProvider.nextBillNumber(widget.returnType);
+
+      // ── BOOK SCOPING FIX: return bills must be numbered and stamped
+      // against the currently active khatabook, exactly like regular
+      // bills. Without this, return numbers and the return itself would
+      // be computed/saved across every book combined.
+      final bookId = context.read<AuthProvider>().activeBookId;
+
+      final billNo = await billsProvider.nextBillNumber(
+        widget.returnType,
+        bookId: bookId,
+      );
       if (!mounted) return;
 
       final now = DateTime.now();
@@ -1929,6 +1974,7 @@ class _AddReturnScreenState extends State<AddReturnScreen> {
         date: _date,
         createdAt: now,
         notes: 'Return for: ${widget.originalBill.billNumber}',
+        bookId: bookId,
       );
 
       await billsProvider.addBill(returnBill);

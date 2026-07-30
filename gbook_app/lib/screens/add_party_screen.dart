@@ -182,6 +182,11 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
 
     try {
       final now = DateTime.now();
+      // ── BOOK SCOPING FIX: stamp every new/edited party with the khatabook
+      // that is currently active. Without this, parties saved with an
+      // empty bookId leaked into every khatabook instead of staying scoped
+      // to the one they were created in.
+      final activeBookId = context.read<AuthProvider>().activeBookId;
 
       if (widget.isSupplier) {
         final provider = context.read<SupplierProvider>();
@@ -197,6 +202,11 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
             address: _addressCtrl.text.trim().isEmpty
                 ? null
                 : _addressCtrl.text.trim(),
+            // Self-heal: keep existing bookId if already set, otherwise
+            // stamp with the active book.
+            bookId: widget.existingSupplier!.bookId.isNotEmpty
+                ? widget.existingSupplier!.bookId
+                : activeBookId,
           ));
         } else {
           await provider.addSupplier(Supplier(
@@ -212,6 +222,7 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
                 ? null
                 : _addressCtrl.text.trim(),
             createdAt: now,
+            bookId: activeBookId,
           ));
         }
       } else {
@@ -228,6 +239,9 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
             address: _addressCtrl.text.trim().isEmpty
                 ? null
                 : _addressCtrl.text.trim(),
+            bookId: widget.existing!.bookId.isNotEmpty
+                ? widget.existing!.bookId
+                : activeBookId,
           ));
         } else {
           await provider.addCustomer(Customer(
@@ -243,6 +257,7 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
                 ? null
                 : _addressCtrl.text.trim(),
             createdAt: now,
+            bookId: activeBookId,
           ));
         }
       }
