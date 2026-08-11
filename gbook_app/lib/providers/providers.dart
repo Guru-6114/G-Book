@@ -12,6 +12,12 @@
 //
 // Double-entry guard: CustomerProvider.addTransaction tracks in-flight
 // transaction IDs and silently ignores a second call for the same id.
+//
+// FIX (this pass): AuthProvider.updateBusiness previously only persisted
+// 'name', 'gstin', and 'category' — any 'businessType' or 'staffCount' key
+// passed in was silently dropped, so Business Type and Staff Count edits on
+// the Book Profile screen appeared to succeed (green snackbar) but never
+// actually changed. Both fields are now handled.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
@@ -188,6 +194,10 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  // ── FIX: now persists 'businessType' and 'staffCount' in addition to
+  // 'name'/'gstin'/'category'. Previously these two keys were accepted by
+  // callers (profile_screen.dart's _pickBusinessType / _pickStaffCount) but
+  // silently ignored here, so the edit never actually saved.
   Future<bool> updateBusiness(Map<String, dynamic> data) async {
     if (_profile == null) return false;
     _error = null;
@@ -196,6 +206,9 @@ class AuthProvider extends ChangeNotifier {
         businessName: data['name'] as String? ?? _profile!.businessName,
         gstin: data['gstin'] as String? ?? _profile!.gstin,
         category: data['category'] as String? ?? _profile!.category,
+        businessType:
+            data['businessType'] as String? ?? _profile!.businessType,
+        staffCount: data['staffCount'] as String? ?? _profile!.staffCount,
       );
       await saveProfile(updated);
       return _error == null;
@@ -669,7 +682,7 @@ class CashbookProvider extends ChangeNotifier {
     notifyListeners();
   }
 }
-// ── StaffProvider (NEW) ───────────────────────────────────────────────────────
+// ── StaffProvider ───────────────────────────────────────────────────────────
 class StaffProvider extends ChangeNotifier {
   final List<Staff> _staff = [];
   final Map<String, List<StaffAttendance>> _attendanceByStaff = {};

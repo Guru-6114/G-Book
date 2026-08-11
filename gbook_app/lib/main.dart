@@ -66,7 +66,19 @@ class GBookApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LocaleProvider()..init()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // ── FIX: previously created bare (`AuthProvider()`), so on every
+        // cold app start `auth.profile` stayed null until some screen
+        // happened to trigger a load. Every screen falls back to the
+        // literal string 'My Business' whenever `auth.profile` is null
+        // (see parties_screen.dart / more_screen.dart), which is exactly
+        // what looked like "it opens a different khatabook called My
+        // Business" — it was never a second khatabook, just the
+        // null-profile placeholder text. `checkAuth()` reads the token
+        // from SharedPreferences and loads whichever business_profile row
+        // currently has isActive = 1 in the DB (i.e. the khatabook you
+        // last had open, exactly like CustomerProvider/BillProvider/etc.
+        // already eagerly load their data below).
+        ChangeNotifierProvider(create: (_) => AuthProvider()..checkAuth()),
         ChangeNotifierProvider(
             create: (_) => CustomerProvider()..loadCustomers()),
         ChangeNotifierProvider(

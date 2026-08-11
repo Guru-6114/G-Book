@@ -1,7 +1,10 @@
 // lib/screens/profile_screen.dart
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/helpers.dart';
@@ -15,6 +18,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _bankAdded = false;
+  String? _bankLast4;
+  String? _photoPath;
   bool _loadingExtras = true;
 
   @override
@@ -28,23 +33,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return auth.profile?.id ?? '';
   }
 
-  // Bank-account status still isn't a DB column (out of scope for this
-  // migration), so it stays in SharedPreferences per-profile.
+  // Bank-account status and the photo path still aren't DB columns (out of
+  // scope for this migration), so they stay in SharedPreferences per-profile.
   Future<void> _loadExtras() async {
     final id = _profileId;
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
       _bankAdded = prefs.getBool('bank_account_$id') ?? false;
+      _bankLast4 = prefs.getString('bank_last4_$id');
+      final path = prefs.getString('profile_photo_$id');
+      // Guard against a stale path pointing at a file that no longer exists
+      // (e.g. cache cleared) so we don't try to render a missing file.
+      _photoPath = (path != null && File(path).existsSync()) ? path : null;
       _loadingExtras = false;
     });
   }
 
-  Future<void> _saveBankAdded() async {
+  // ── Photo picker ──────────────────────────────────────────────────────
+  Future<void> _pickPhoto() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1024,
+      );
+      if (picked == null) return; // user cancelled the picker
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile_photo_$_profileId', picked.path);
+
+      if (!mounted) return;
+      setState(() => _photoPath = picked.path);
+      AppHelpers.showSuccessSnackBar(context, 'Photo updated');
+    } catch (e) {
+      if (!mounted) return;
+      AppHelpers.showErrorSnackBar(context, 'Could not open gallery: $e');
+    }
+  }
+
+  Future<void> _removePhoto() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('bank_account_$_profileId', true);
+    await prefs.remove('profile_photo_$_profileId');
     if (!mounted) return;
-    setState(() => _bankAdded = true);
+    setState(() => _photoPath = null);
+    AppHelpers.showSuccessSnackBar(context, 'Photo removed');
   }
 
   // ── Profile strength ────────────────────────────────────────────────────
@@ -157,11 +191,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openBankAccount() async {
-    final added = await Navigator.push<bool>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(builder: (_) => const _BankAccountScreen()),
+      MaterialPageRoute(
+        builder: (_) => _BankAccountScreen(profileId: _profileId),
+      ),
     );
-    if (added == true) await _saveBankAdded();
+    if (result == null) return;
+    final accountNumber = result['accountNumber'] as String?;
+    if (accountNumber == null || accountNumber.isEmpty) return;
+    await _saveBankAdded(accountNumber);
+  }
+
+  Future<void> _saveBankAdded(String accountNumber) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('bank_account_$_profileId', true);
+    final last4 = accountNumber.length >= 4
+        ? accountNumber.substring(accountNumber.length - 4)
+        : accountNumber;
+    await prefs.setString('bank_last4_$_profileId', last4);
+    if (!mounted) return;
+    setState(() {
+      _bankAdded = true;
+      _bankLast4 = last4;
+    });
+    AppHelpers.showSuccessSnackBar(context, 'Bank account added');
   }
 
   Future<void> _pickStaffCount() async {
@@ -242,45 +296,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // ── Avatar + Add photo ─────────────────────────────────────────
           const SizedBox(height: 24),
           Center(
-            child: Stack(
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.grey.shade300, width: 1.5),
+            child: GestureDetector(
+              onTap: _pickPhoto,
+              child: Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.grey.shade100,
+                      border:
+                          Border.all(color: Colors.grey.shade300, width: 1.5),
+                      image: _photoPath != null
+                          ? DecorationImage(
+                              image: FileImage(File(_photoPath!)),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: _photoPath == null
+                        ? Icon(Icons.person_outline,
+                            size: 54, color: Colors.grey.shade400)
+                        : null,
                   ),
-                  child: Icon(Icons.person_outline,
-                      size: 54, color: Colors.grey.shade400),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: GestureDetector(
-                    onTap: () => AppHelpers.showSuccessSnackBar(
-                        context, 'Photo upload coming soon'),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        shape: BoxShape.circle,
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _pickPhoto,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: AppTheme.primaryColor,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.camera_alt,
+                            color: Colors.white, size: 16),
                       ),
-                      child: const Icon(Icons.camera_alt,
-                          color: Colors.white, size: 16),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 6),
           Center(
-            child: TextButton(
-              onPressed: () => AppHelpers.showSuccessSnackBar(
-                  context, 'Photo upload coming soon'),
-              child: const Text('Add photo'),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: _pickPhoto,
+                  child: Text(_photoPath == null ? 'Add photo' : 'Change photo'),
+                ),
+                if (_photoPath != null)
+                  TextButton(
+                    onPressed: _removePhoto,
+                    style: TextButton.styleFrom(foregroundColor: AppTheme.debit),
+                    child: const Text('Remove'),
+                  ),
+              ],
             ),
           ),
 
@@ -411,7 +487,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _InfoRow(
             icon: Icons.account_balance_outlined,
             label: 'Bank account',
-            value: _bankAdded ? 'Added' : '',
+            value: _bankAdded
+                ? (_bankLast4 != null ? 'Added •••• $_bankLast4' : 'Added')
+                : '',
             emptyHint: 'Add Details',
             onTap: _openBankAccount,
           ),
@@ -731,86 +809,190 @@ class _BusinessTypePickerScreenState
 }
 
 // ── Bank account screen ───────────────────────────────────────────────────
-class _BankAccountScreen extends StatelessWidget {
-  const _BankAccountScreen();
+// FIX: this used to be a static info screen whose "ADD BANK ACCOUNT" button
+// just popped `true` without collecting any data. It's now a real form that
+// validates and returns the entered account number so the caller can store
+// it and show a masked confirmation ("Added •••• 1234").
+class _BankAccountScreen extends StatefulWidget {
+  final String profileId;
+  const _BankAccountScreen({required this.profileId});
+
+  @override
+  State<_BankAccountScreen> createState() => _BankAccountScreenState();
+}
+
+class _BankAccountScreenState extends State<_BankAccountScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _holderCtrl = TextEditingController();
+  final _accountCtrl = TextEditingController();
+  final _confirmAccountCtrl = TextEditingController();
+  final _ifscCtrl = TextEditingController();
+  final _bankNameCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExisting();
+  }
+
+  Future<void> _loadExisting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('bank_details_${widget.profileId}');
+    if (raw == null || !mounted) return;
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      _holderCtrl.text = data['holderName'] as String? ?? '';
+      _bankNameCtrl.text = data['bankName'] as String? ?? '';
+      _ifscCtrl.text = data['ifsc'] as String? ?? '';
+      // Account number itself isn't prefilled for privacy; holder can
+      // re-enter it if they want to update the saved details.
+    } catch (_) {
+      // ignore malformed stored data
+    }
+  }
+
+  @override
+  void dispose() {
+    _holderCtrl.dispose();
+    _accountCtrl.dispose();
+    _confirmAccountCtrl.dispose();
+    _ifscCtrl.dispose();
+    _bankNameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'bank_details_${widget.profileId}',
+        jsonEncode({
+          'holderName': _holderCtrl.text.trim(),
+          'bankName': _bankNameCtrl.text.trim(),
+          'ifsc': _ifscCtrl.text.trim().toUpperCase(),
+        }),
+      );
+      if (!mounted) return;
+      Navigator.pop(context, {'accountNumber': _accountCtrl.text.trim()});
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Bank Account')),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: const Color(0xFFEFEFEF),
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: const Icon(Icons.account_balance,
-                size: 90, color: Color(0xFF2E7D32)),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Customers can now pay you online!',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 20),
-                  const _BankStep(
-                    icon: Icons.person_outline,
-                    text: 'Select customer to receive payments from',
-                  ),
-                  const _BankStep(
-                    icon: Icons.currency_rupee,
-                    text: 'Enter the payment amount',
-                  ),
-                  const _BankStep(
-                    icon: Icons.sms_outlined,
-                    text: 'Send payment link for them to pay!',
-                  ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        AppHelpers.showSuccessSnackBar(
-                            context, 'Bank account added');
-                        Navigator.pop(context, true);
-                      },
-                      child: const Text('ADD BANK ACCOUNT'),
-                    ),
-                  ),
-                ],
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFEFEF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.account_balance,
+                  size: 60, color: Color(0xFF2E7D32)),
+            ),
+            const SizedBox(height: 20),
+            const Text('Add your bank account',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            const Text(
+              'Customers can pay you online once your bank account is added.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF757575)),
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _holderCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Account Holder Name *',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _bankNameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Bank Name *',
+                prefixIcon: Icon(Icons.account_balance_outlined),
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _accountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Account Number *',
+                prefixIcon: Icon(Icons.credit_card_outlined),
+              ),
+              validator: (v) {
+                final val = v?.trim() ?? '';
+                if (val.isEmpty) return 'Required';
+                if (val.length < 6) return 'Enter a valid account number';
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _confirmAccountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Confirm Account Number *',
+                prefixIcon: Icon(Icons.credit_card_outlined),
+              ),
+              validator: (v) {
+                if (v?.trim() != _accountCtrl.text.trim()) {
+                  return 'Account numbers do not match';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _ifscCtrl,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'IFSC Code *',
+                prefixIcon: Icon(Icons.pin_outlined),
+              ),
+              validator: (v) {
+                final val = v?.trim() ?? '';
+                if (val.length != 11) return 'Enter a valid 11-character IFSC';
+                return null;
+              },
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _submit,
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('ADD BANK ACCOUNT'),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BankStep extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _BankStep({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: AppTheme.primaryColor,
-            child: Icon(icon, color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
-        ],
+          ],
+        ),
       ),
     );
   }
